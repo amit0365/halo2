@@ -8,7 +8,7 @@ use crate::plonk::{
     Advice, Any, Assigned, Challenge, Column, Error, Fixed, Instance, Selector, TableColumn,
 };
 
-mod value;
+pub mod value;
 pub use value::Value;
 
 pub mod floor_planner;
@@ -95,6 +95,28 @@ pub struct Cell {
     pub row_offset: usize,
     /// The column of this cell.
     pub column: Column<Any>,
+}
+
+impl Cell {
+    /// Returns row_offset.
+    pub fn row_offset(&self) -> usize {
+        self.row_offset
+    }
+
+    /// Returns column.
+    pub fn column(&self) -> Column<Any> {
+        self.column
+    }
+}
+
+impl From<(RegionIndex, usize, Column<Any>)> for Cell {
+    fn from((region_index, row_offset, column): (RegionIndex, usize, Column<Any>)) -> Self {
+        Self {
+            region_index,
+            row_offset,
+            column,
+        }
+    }
 }
 
 /// An assigned cell.
