@@ -1,6 +1,6 @@
 //! Implementation of permutation argument.
 
-use super::circuit::{Any, Column};
+use super::{circuit::{Any, Column}, Fixed};
 use crate::{
     arithmetic::CurveAffine,
     helpers::{
@@ -24,11 +24,12 @@ use std::io;
 pub struct Argument {
     /// A sequence of columns involved in the argument.
     pub(super) columns: Vec<Column<Any>>,
+    pub(super) fixed_columns: Vec<Column<Any>>,
 }
 
 impl Argument {
     pub(crate) fn new() -> Self {
-        Argument { columns: vec![] }
+        Argument { columns: vec![], fixed_columns: vec![] }
     }
 
     /// Returns the minimum circuit degree required by the permutation argument.
@@ -72,12 +73,20 @@ impl Argument {
     pub(crate) fn add_column(&mut self, column: Column<Any>) {
         if !self.columns.contains(&column) {
             self.columns.push(column);
+            if column.column_type() == &Any::Fixed {
+                self.fixed_columns.push(column);
+            };
         }
     }
 
     /// Returns columns that participate on the permutation argument.
     pub fn get_columns(&self) -> Vec<Column<Any>> {
         self.columns.clone()
+    }
+
+    /// Returns the fixed columns that participate on the permutation argument.
+    pub fn get_fixed_columns(&self) -> Vec<Column<Any>> {
+        self.fixed_columns.clone()
     }
 }
 
