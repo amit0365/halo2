@@ -300,6 +300,34 @@ pub trait Domain<F: Field, const RATE: usize> {
     fn padding(input_len: usize) -> Self::Padding;
 }
 
+/// A Poseidon hash function used with variable input length.
+///
+/// Domain specified in [ePrint 2019/458 section 4.2](https://eprint.iacr.org/2019/458.pdf).
+#[derive(Clone, Copy, Debug)]
+pub struct VariableLength<const L: usize>;
+
+impl<F: PrimeField, const RATE: usize, const L: usize> Domain<F, RATE> for VariableLength<L> {
+    type Padding = iter::Take<iter::Chain<iter::Once<F>, iter::Repeat<F>>>;
+
+    fn name() -> String {
+        format!("VariableLength<{}>", L)
+    }
+
+    fn initial_capacity_element() -> F {
+        // Capacity value is $length \cdot 2^64 + (o-1)$ where o is the output length.
+        // We hard-code an output length of 1.
+        F::from_u128((L as u128) << 64)
+    }
+
+    fn padding(input_len: usize) -> Self::Padding {
+        let k = (input_len + RATE - 1) / RATE;
+        iter::once(F::ONE)
+            .chain(iter::repeat(F::ZERO))
+            .take(k * RATE - input_len)
+    }
+}
+
+
 /// A Poseidon hash function used with constant input length.
 ///
 /// Domain specified in [ePrint 2019/458 section 4.2](https://eprint.iacr.org/2019/458.pdf).
