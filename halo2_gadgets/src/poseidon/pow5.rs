@@ -324,7 +324,6 @@ impl<
             || format!("add input for domain {}", D::name()),
             |mut region| {
                 config.s_pad_and_add.enable(&mut region, 1)?;
-
                 // Load the initial state into this region.
                 let load_state_word = |i: usize| {
                     initial_state[i]
@@ -340,31 +339,51 @@ impl<
                 let initial_state: Result<Vec<_>, Error> =
                     (0..WIDTH).map(load_state_word).collect();
                 let initial_state = initial_state?;
-
                 // Load the input into this region.
                 let load_input_word = |i: usize| {
-                    let constraint_var = match input.0[i].clone() {
-                        Some(PaddedWord::Message(word)) => word,
-                        Some(PaddedWord::Padding(padding_value)) => region.assign_fixed(
-                            || format!("load pad_{}", i),
-                            config.rc_b[i],
-                            1,
-                            || Value::known(padding_value),
-                        )?,
+                    // let constraint_var = match input.0[i].clone() {
+                    //     Some(PaddedWord::Message(word)) => word,
+                    //     Some(PaddedWord::Padding(padding_value)) => region.assign_fixed(
+                    //         || format!("load pad_{}", i),
+                    //         config.rc_b[i],
+                    //         1,
+                    //         || Value::known(padding_value),
+                    //     )?,
+                    let (cell, value) = match input.0[i].clone() {
+                        Some(PaddedWord::Message(word)) => (word.cell(), word.value().copied()),
+                        Some(PaddedWord::Padding(padding_value)) => {
+                            let cell = region
+                                .assign_fixed(
+                                    || format!("load pad_{}", i),
+                                    config.rc_b[i],
+                                    1,
+                                    || Value::known(padding_value),
+                                )?
+                                .cell();
+                            (cell, Value::known(padding_value))
+                        }
                         _ => panic!("Input is not padded"),
                     };
-                    constraint_var
-                        .copy_advice(
-                            || format!("load input_{}", i),
-                            &mut region,
-                            config.state[i],
-                            1,
-                        )
-                        .map(StateWord)
+                    // constraint_var
+                    //     .copy_advice(
+                    //         || format!("load input_{}", i),
+                    //         &mut region,
+                    //         config.state[i],
+                    //         1,
+                    //     )
+                    //     .map(StateWord)
+                    let var = region.assign_advice(
+                        || format!("load input_{}", i),
+                        config.state[i],
+                        1,
+                        || value,
+                    )?;
+                    region.constrain_equal(cell, var.cell())?;
+
+                    Ok(StateWord(var))
                 };
                 let input: Result<Vec<_>, Error> = (0..RATE).map(load_input_word).collect();
                 let input = input?;
-
                 // Constrain the output.
                 let constrain_output_word = |i: usize| {
                     let value = initial_state[i].0.value().copied()
@@ -382,7 +401,6 @@ impl<
                         )
                         .map(StateWord)
                 };
-
                 let output: Result<Vec<_>, Error> = (0..WIDTH).map(constrain_output_word).collect();
                 output.map(|output| output.try_into().unwrap())
             },

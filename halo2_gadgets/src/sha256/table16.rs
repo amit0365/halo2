@@ -288,7 +288,7 @@ impl Table16Chip {
         let lookup_inputs = lookup.input.clone();
 
         // Rename these here for ease of matching the gates to the specification.
-        let _a_0 = lookup_inputs.tag;
+        let _a_0 = lookup_inputs.c;
         let a_1 = lookup_inputs.dense;
         let a_2 = lookup_inputs.spread;
         let a_3 = extras[0];

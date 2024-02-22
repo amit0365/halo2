@@ -192,14 +192,13 @@ impl<
         mut self,
         mut layouter: impl Layouter<F>,
     ) -> Result<Sponge<F, PoseidonChip, S, Squeezing<PoseidonChip::Word, RATE>, D, T, RATE>, Error>
-    {
+    {   
         let mode = poseidon_sponge(
             &self.chip,
             layouter.namespace(|| "PoseidonSponge"),
             &mut self.state,
             Some(&self.mode),
         )?;
-
         Ok(Sponge {
             chip: self.chip,
             mode,
@@ -226,7 +225,6 @@ impl<
                     return Ok(inner.into());
                 }
             }
-
             // We've already squeezed out all available elements
             self.mode = poseidon_sponge(
                 &self.chip,
@@ -286,7 +284,7 @@ impl<
             .map(PaddedWord::Message)
             .chain(<ConstantLength<L> as Domain<F, RATE>>::padding(L).map(PaddedWord::Padding))
             .enumerate()
-        {
+        {   
             self.sponge
                 .absorb(layouter.namespace(|| format!("absorb_{}", i)), value)?;
         }
