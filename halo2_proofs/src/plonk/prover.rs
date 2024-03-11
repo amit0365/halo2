@@ -329,7 +329,7 @@ where
                     _marker: std::marker::PhantomData,
                 };
 
-                // Synthesize the circuit to obtain the witness and other information.
+                // Synthesize the circuit to obtain the witness and other information
                 ConcreteCircuit::FloorPlanner::synthesize(
                     &mut witness,
                     circuit,
