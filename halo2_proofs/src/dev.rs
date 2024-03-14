@@ -617,21 +617,24 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
         let config = ConcreteCircuit::configure(&mut cs);
         let cs = cs;
 
-        println!("cs {:?}", cs);
-
         let constraints_vec = cs
             .gates()
             .iter()
             .flat_map(|gate| gate.polynomials())
             .collect::<Vec<_>>();
-    
 
         let degree_vec = constraints_vec
             .iter()
             .map(|poly| poly.degree())
             .collect::<Vec<_>>();
 
+        let complexity_vec = constraints_vec
+            .iter()
+            .map(|poly| poly.complexity())
+            .collect::<Vec<_>>();
+
         println!("degree_vec: {:?}", degree_vec);
+        println!("complexity_vec: {:?}", complexity_vec);
 
         assert!(
             n >= cs.minimum_rows(),
