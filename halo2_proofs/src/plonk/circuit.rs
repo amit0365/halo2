@@ -15,6 +15,7 @@ use std::{
     convert::TryFrom,
     ops::{Neg, Sub},
 };
+pub use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize, Serializer};
 
 mod compress_selectors;
 
@@ -94,8 +95,10 @@ impl<C: ColumnType> PartialOrd for Column<C> {
 }
 
 pub(crate) mod sealed {
+    use serde::{Serialize, Deserialize};
+
     /// Phase of advice column
-    #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
     pub struct Phase(pub(super) u8);
 
     impl Phase {
@@ -451,7 +454,7 @@ impl TryFrom<Column<Any>> for Column<Instance> {
 ///     Ok(())
 /// }
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Selector(pub(crate) usize, bool);
 
 impl Selector {
@@ -478,7 +481,7 @@ impl Selector {
 }
 
 /// Query of fixed column at a certain relative location
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct FixedQuery {
     /// Query index
     pub(crate) index: Option<usize>,
@@ -501,7 +504,7 @@ impl FixedQuery {
 }
 
 /// Query of advice column at a certain relative location
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct AdviceQuery {
     /// Query index
     pub(crate) index: Option<usize>,
@@ -531,7 +534,7 @@ impl AdviceQuery {
 }
 
 /// Query of instance column at a certain relative location
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct InstanceQuery {
     /// Query index
     pub(crate) index: Option<usize>,
@@ -583,7 +586,7 @@ impl TableColumn {
 }
 
 /// A challenge squeezed from transcript after advice columns at the phase have been committed.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Challenge {
     index: usize,
     pub(crate) phase: sealed::Phase,
@@ -792,7 +795,7 @@ pub trait Circuit<F: Field> {
 }
 
 /// Low-degree expression representing an identity that must hold over the committed columns.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Expression<F> {
     /// This is a constant polynomial
     Constant(F),

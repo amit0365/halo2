@@ -1,6 +1,6 @@
 //! Implementation of permutation argument.
 
-use super::{circuit::{Any, Column}, Fixed};
+use super::circuit::{Any, Column};
 use crate::{
     arithmetic::CurveAffine,
     helpers::{
