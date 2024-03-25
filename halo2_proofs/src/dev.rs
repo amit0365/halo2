@@ -672,7 +672,8 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
         // Advice columns contain blinding factors.
         let blinding_factors = cs.blinding_factors();
         // let usable_rows = n - (blinding_factors + 1);
-        let usable_rows = n - (blinding_factors);
+        let usable_rows = n;
+
         let advice = vec![
             {
                 let mut column = vec![CellValue::Unassigned; n];
@@ -710,7 +711,7 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
             selectors,
             challenges,
             permutation,
-            usable_rows: 0..usable_rows,
+            usable_rows: 0..usable_rows + 1,
             current_phase: FirstPhase.to_sealed(),
         };
 
