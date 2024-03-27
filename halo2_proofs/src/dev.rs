@@ -711,7 +711,7 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
             selectors,
             challenges,
             permutation,
-            usable_rows: 0..usable_rows + 1,
+            usable_rows: 0..usable_rows,
             current_phase: FirstPhase.to_sealed(),
         };
 
@@ -856,8 +856,9 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
                 .iter()
                 .enumerate()
                 .flat_map(|(gate_index, gate)| {
-                    let blinding_rows =
-                        (self.n as usize - (self.cs.blinding_factors() + 1))..(self.n as usize);
+                    // let blinding_rows =
+                    //     (self.n as usize - (self.cs.blinding_factors() + 1))..(self.n as usize);
+                    let blinding_rows = 0..0;
                     (gate_row_ids.clone().chain(blinding_rows.into_iter())).flat_map(move |row| {
                         let row = row as i32 + n;
                         gate.polynomials().iter().enumerate().filter_map(
@@ -1307,8 +1308,9 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
             .iter()
             .enumerate()
             .flat_map(|(gate_index, gate)| {
-                let blinding_rows =
-                    (self.n as usize - (self.cs.blinding_factors() + 1))..(self.n as usize);
+                // let blinding_rows =
+                //     (self.n as usize - (self.cs.blinding_factors() + 1))..(self.n as usize);
+                let blinding_rows = 0..0;
                 (gate_row_ids
                     .clone()
                     .into_par_iter()
