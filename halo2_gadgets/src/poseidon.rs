@@ -241,9 +241,9 @@ impl<
         mut self,
         squeezed_cell: AssignedCell<F, F>,
         mut layouter: impl Layouter<F>,
-    ) -> Result<Sponge<F, PoseidonChip, S, Absorbing<PoseidonChip::Word, RATE>, D, T, RATE>, Error>
+    ) -> Result<Sponge<F, PoseidonChip, S, Absorbing<PaddedWord<F>, RATE>, D, T, RATE>, Error>
     {   
-        let mode = Absorbing::init_with(PoseidonChip::Word::from(StateWord::from(squeezed_cell).into()));
+        let mode = Absorbing::init_with(PaddedWord::Message(squeezed_cell));
         Ok(Sponge {
             chip: self.chip,
             mode,
