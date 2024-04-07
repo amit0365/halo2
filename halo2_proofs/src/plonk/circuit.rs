@@ -1524,7 +1524,7 @@ impl<F: Field> Gate<F> {
         &self.polys
     }
 
-    pub(crate) fn queried_selectors(&self) -> &[Selector] {
+    pub fn queried_selectors(&self) -> &[Selector] {
         &self.queried_selectors
     }
 
@@ -1551,7 +1551,7 @@ pub struct ConstraintSystem<F: Field> {
     /// This is a cached vector that maps virtual selectors to the concrete
     /// fixed column that they were compressed into. This is just used by dev
     /// tooling right now.
-    pub(crate) selector_map: Vec<Column<Fixed>>,
+    pub selector_map: Vec<Column<Fixed>>,
 
     pub(crate) gates: Vec<Gate<F>>,
     pub(crate) advice_queries: Vec<(Column<Advice>, Rotation)>,
