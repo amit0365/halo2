@@ -81,6 +81,7 @@ getrandom = { version = "0.2", features = ["js"] }
 default = ["batch", "multicore", "circuit-params"]
 multicore = ["maybe-rayon/threads"]
 dev-graph = ["plotters", "tabbycat"]
+derive_serde = ["halo2curves/derive_serde"]
 test-dev-graph = [
     "dev-graph",
     "plotters/bitmap_backend",
