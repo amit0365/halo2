@@ -86,6 +86,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
         NR: Into<String>,
     {
         let region_index = self.regions.len();
+        println!("assign_region: region_index: {}", region_index);
 
         // Get shape of the region.
         let mut shape = RegionShape::new(region_index.into());
@@ -93,14 +94,18 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
             let region: &mut dyn RegionLayouter<F> = &mut shape;
             assignment(region.into())?;
         }
-
+        println!("assign_region: shape_row_count: {:?}", shape.row_count());
+        println!("assign_region: shape_region_index: {:?}", shape.region_index);
         // Lay out this region. We implement the simplest approach here: position the
         // region starting at the earliest row for which none of the columns are in use.
         let mut region_start = 0;
         for column in &shape.columns {
             region_start = cmp::max(region_start, self.columns.get(column).cloned().unwrap_or(0));
         }
+
         self.regions.push(region_start.into());
+        println!("assign_region: self.regions: {:?}", self.regions);
+        println!("after_region_push shape_row_count: {:?}", shape.row_count());
 
         // Update column usage information.
         for column in shape.columns {
@@ -114,6 +119,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
             let region: &mut dyn RegionLayouter<F> = &mut region;
             assignment(region.into())
         }?;
+        // println!("after_region_cells shape_row_count: {:?}", shape.row_count());
         let constants_to_assign = region.constants;
         self.cs.exit_region();
 
