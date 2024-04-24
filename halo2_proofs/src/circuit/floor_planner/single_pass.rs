@@ -92,7 +92,6 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
         NR: Into<String>,
     {
         let region_index = self.regions.len();
-        // println!("assign_region: region_index: {}", region_index);
 
         // Get shape of the region.
         let mut shape = RegionShape::new(region_index.into());
@@ -100,8 +99,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
             let region: &mut dyn RegionLayouter<F> = &mut shape;
             assignment(region.into())?;
         }
-        // println!("assign_region: shape_row_count: {:?}", shape.row_count());
-        // println!("assign_region: shape_region_index: {:?}", shape.region_index);
+
 
         let region_info = RegionInfo {
             region_index,
@@ -109,7 +107,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
             selector_map: HashMap::new(),
         };
 
-        // self.regions_info.push(region_info);
+
 
         // Lay out this region. We implement the simplest approach here: position the
         // region starting at the earliest row for which none of the columns are in use.
@@ -119,9 +117,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
         }
 
         self.regions.push(region_start.into());
-        // println!("assign_region: self.regions: {:?}", self.regions);
-        // println!("after_region_push shape_row_count: {:?}", shape.row_count());
-        //let row_count = shape.row_count();
+
 
         // Update column usage information.
         for column in shape.columns {
@@ -135,7 +131,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
             let region: &mut dyn RegionLayouter<F> = &mut region;
             assignment(region.into())
         }?;
-        // println!("after_region_cells shape_row_count: {:?}", shape.row_count());
+
         let constants_to_assign = region.constants;
         self.cs.exit_region();
 
@@ -282,11 +278,6 @@ impl<'r, 'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> RegionLayouter<F>
         selector: &Selector,
         offset: usize,
     ) -> Result<(), Error> {
-        // println!("enable_selector: region_index: {:?}", self.region_index);
-        // println!("enable_selector: offset: {:?}", offset);
-        // println!("enable_selector: selector: {:?}", selector);
-        // self.region_info.selector_map.insert(selector.0, offset);
-        // println!("enable_selector: row_count: {:?}", self.row_count);
         self.layouter.cs.enable_selector(
             annotation,
             selector,

@@ -577,9 +577,6 @@ impl<F: Field, const WIDTH: usize> Pow5State<F, WIDTH> {
     ) -> Result<Self, Error> {
         // Enable the required gate.
         round_gate.enable(region, offset)?;
-        // println!("round: {}", round);
-        // println!("offset: {}", offset);
-        // println!("round_gate: {:?}", round_gate);
         // Load the round constants.
         let mut load_round_constant = |i: usize| {
             region.assign_fixed(
