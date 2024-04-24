@@ -37,6 +37,12 @@ impl FloorPlanner for SimpleFloorPlanner {
     }
 }
 
+pub struct RegionInfo {
+    region_index: usize,
+    row_count: usize,
+    selector_map: HashMap<usize, usize>,
+}
+
 /// A [`Layouter`] for a single-chip circuit.
 pub struct SingleChipLayouter<'a, F: Field, CS: Assignment<F> + 'a> {
     cs: &'a mut CS,
@@ -86,7 +92,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
         NR: Into<String>,
     {
         let region_index = self.regions.len();
-        println!("assign_region: region_index: {}", region_index);
+        // println!("assign_region: region_index: {}", region_index);
 
         // Get shape of the region.
         let mut shape = RegionShape::new(region_index.into());
@@ -94,8 +100,17 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
             let region: &mut dyn RegionLayouter<F> = &mut shape;
             assignment(region.into())?;
         }
-        println!("assign_region: shape_row_count: {:?}", shape.row_count());
-        println!("assign_region: shape_region_index: {:?}", shape.region_index);
+        // println!("assign_region: shape_row_count: {:?}", shape.row_count());
+        // println!("assign_region: shape_region_index: {:?}", shape.region_index);
+
+        let region_info = RegionInfo {
+            region_index,
+            row_count: shape.row_count(),
+            selector_map: HashMap::new(),
+        };
+
+        // self.regions_info.push(region_info);
+
         // Lay out this region. We implement the simplest approach here: position the
         // region starting at the earliest row for which none of the columns are in use.
         let mut region_start = 0;
@@ -104,9 +119,9 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
         }
 
         self.regions.push(region_start.into());
-        println!("assign_region: self.regions: {:?}", self.regions);
-        println!("after_region_push shape_row_count: {:?}", shape.row_count());
-        let row_count = shape.row_count();
+        // println!("assign_region: self.regions: {:?}", self.regions);
+        // println!("after_region_push shape_row_count: {:?}", shape.row_count());
+        //let row_count = shape.row_count();
 
         // Update column usage information.
         for column in shape.columns {
@@ -115,7 +130,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
 
         // Assign region cells.
         self.cs.enter_region(name);
-        let mut region = SingleChipLayouterRegion::new(self, region_index.into(), row_count);
+        let mut region = SingleChipLayouterRegion::new(self, region_index.into(), region_info);
         let result = {
             let region: &mut dyn RegionLayouter<F> = &mut region;
             assignment(region.into())
@@ -233,7 +248,7 @@ struct SingleChipLayouterRegion<'r, 'a, F: Field, CS: Assignment<F> + 'a> {
     region_index: RegionIndex,
     /// Stores the constants to be assigned, and the cells to which they are copied.
     constants: Vec<(Assigned<F>, Cell)>,
-    row_count: usize,
+    region_info: RegionInfo,
 }
 
 impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug
@@ -248,12 +263,12 @@ impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug
 }
 
 impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> SingleChipLayouterRegion<'r, 'a, F, CS> {
-    fn new(layouter: &'r mut SingleChipLayouter<'a, F, CS>, region_index: RegionIndex, row_count: usize) -> Self {
+    fn new(layouter: &'r mut SingleChipLayouter<'a, F, CS>, region_index: RegionIndex, region_info: RegionInfo) -> Self {
         SingleChipLayouterRegion {
             layouter,
             region_index,
             constants: vec![],
-            row_count,
+            region_info,
         }
     }
 }
@@ -267,10 +282,11 @@ impl<'r, 'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> RegionLayouter<F>
         selector: &Selector,
         offset: usize,
     ) -> Result<(), Error> {
-        println!("enable_selector: region_index: {:?}", self.region_index);
-        println!("enable_selector: offset: {:?}", offset);
-        println!("enable_selector: selector: {:?}", selector);
-        println!("enable_selector: row_count: {:?}", self.row_count);
+        // println!("enable_selector: region_index: {:?}", self.region_index);
+        // println!("enable_selector: offset: {:?}", offset);
+        // println!("enable_selector: selector: {:?}", selector);
+        // self.region_info.selector_map.insert(selector.0, offset);
+        // println!("enable_selector: row_count: {:?}", self.row_count);
         self.layouter.cs.enable_selector(
             annotation,
             selector,
