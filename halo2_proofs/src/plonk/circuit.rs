@@ -460,9 +460,6 @@ pub struct Selector(pub(crate) usize, bool);
 impl Selector {
     /// Enable this selector at the given offset within the given region.
     pub fn enable<F: Field>(&self, region: &mut Region<F>, offset: usize) -> Result<(), Error> {
-        println!("Selector::enable");
-        println!("Selector::enable: offset = {}", offset);
-        println!("Selector::enable: self = {:?}", self);
         region.enable_selector(|| "", self, offset)
     }
 
