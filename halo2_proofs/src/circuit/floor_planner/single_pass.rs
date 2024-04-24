@@ -106,6 +106,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
         self.regions.push(region_start.into());
         println!("assign_region: self.regions: {:?}", self.regions);
         println!("after_region_push shape_row_count: {:?}", shape.row_count());
+        let row_count = shape.row_count();
 
         // Update column usage information.
         for column in shape.columns {
@@ -114,7 +115,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F>
 
         // Assign region cells.
         self.cs.enter_region(name);
-        let mut region = SingleChipLayouterRegion::new(self, region_index.into());
+        let mut region = SingleChipLayouterRegion::new(self, region_index.into(), row_count);
         let result = {
             let region: &mut dyn RegionLayouter<F> = &mut region;
             assignment(region.into())
@@ -232,6 +233,7 @@ struct SingleChipLayouterRegion<'r, 'a, F: Field, CS: Assignment<F> + 'a> {
     region_index: RegionIndex,
     /// Stores the constants to be assigned, and the cells to which they are copied.
     constants: Vec<(Assigned<F>, Cell)>,
+    row_count: usize,
 }
 
 impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug
@@ -246,11 +248,12 @@ impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug
 }
 
 impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> SingleChipLayouterRegion<'r, 'a, F, CS> {
-    fn new(layouter: &'r mut SingleChipLayouter<'a, F, CS>, region_index: RegionIndex) -> Self {
+    fn new(layouter: &'r mut SingleChipLayouter<'a, F, CS>, region_index: RegionIndex, row_count: usize) -> Self {
         SingleChipLayouterRegion {
             layouter,
             region_index,
             constants: vec![],
+            row_count,
         }
     }
 }
@@ -267,6 +270,7 @@ impl<'r, 'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> RegionLayouter<F>
         println!("enable_selector: region_index: {:?}", self.region_index);
         println!("enable_selector: offset: {:?}", offset);
         println!("enable_selector: selector: {:?}", selector);
+        println!("enable_selector: row_count: {:?}", self.row_count);
         self.layouter.cs.enable_selector(
             annotation,
             selector,
