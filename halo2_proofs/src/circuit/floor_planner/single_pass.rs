@@ -264,6 +264,9 @@ impl<'r, 'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> RegionLayouter<F>
         selector: &Selector,
         offset: usize,
     ) -> Result<(), Error> {
+        println!("enable_selector: region_index: {:?}", self.region_index);
+        println!("enable_selector: offset: {:?}", offset);
+        println!("enable_selector: selector: {:?}", selector);
         self.layouter.cs.enable_selector(
             annotation,
             selector,
