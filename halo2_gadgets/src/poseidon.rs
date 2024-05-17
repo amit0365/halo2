@@ -372,11 +372,18 @@ impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonSpongeChip<F, T, 
         }
     }
 
-    // /// Initialize a poseidon hasher from an existing spec.
-    // pub fn from_spec(ctx: &mut Context<F>, spec: OptimizedPoseidonSpec<F, T, RATE>) -> Self {
-    //     let init_state = PoseidonState::default(ctx);
-    //     Self { spec, state: init_state.clone(), init_state, absorbing: Vec::new() }
-    // }
+    /// Initialize a poseidon hasher from an existing spec.
+    pub fn from_spec(chip: Pow5Chip<F, T, RATE>, layouter: impl Layouter<F>, spec: PoseidonSpec) -> Self {
+        let init_state = chip.initial_state(layouter).unwrap();
+        let state = init_state.clone();
+        Self {
+            chip,
+            init_state,
+            state,
+            spec,
+            absorbing: Vec::new(),
+        }
+    }
 
     /// Reset state to default and clear the buffer.
     pub fn clear(&mut self) {
