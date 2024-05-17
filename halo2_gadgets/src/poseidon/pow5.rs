@@ -612,6 +612,27 @@ impl<F: Field, const WIDTH: usize> Pow5State<F, WIDTH> {
 
 impl<F: PrimeField, const WIDTH: usize, const RATE: usize> Pow5Chip<F, WIDTH, RATE> {
 
+    pub fn assign_witness(
+        &self,
+        mut layouter: impl Layouter<F>,
+        witness: &F,
+    ) -> Result<AssignedCell<F, F>, Error> {
+        let config = self.config();
+        let witness = layouter.assign_region(
+            || "assign witness",
+            |mut region| {
+                let witness = region.assign_advice(
+                        || "witness",
+                        config.state[0],
+                        0,
+                        || Value::known(*witness),
+                    )?;
+                Ok(witness)
+            },
+        )?;
+        Ok(witness)
+    }
+
     pub fn initial_state(
         &self,
         mut layouter: impl Layouter<F>,
