@@ -350,7 +350,7 @@ pub(crate) struct PoseidonState<F: PrimeField, const T: usize, const RATE: usize
 #[derive(Clone, Debug)]
 /// Poseidon sponge. This is stateful.
 pub struct PoseidonSpongeChip<F: PrimeField, const T: usize, const RATE: usize> {
-    chip: Pow5Chip<F, T, RATE>,
+    pub chip: Pow5Chip<F, T, RATE>,
     init_state: State<StateWord<F>, T>,
     state: State<StateWord<F>, T>,
     spec: PoseidonSpec,
