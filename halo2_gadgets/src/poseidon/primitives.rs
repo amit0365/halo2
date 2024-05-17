@@ -330,6 +330,36 @@ impl<F: PrimeField, const RATE: usize, const L: usize> Domain<F, RATE> for Const
     }
 }
 
+/// A Poseidon hash function used with variable input length, this is iden3's specifications
+#[derive(Clone, Copy, Debug)]
+pub struct VariableLength<F, const RATE: usize> {
+    _marker: PhantomData<F>,
+}
+
+impl<F: PrimeField, const RATE: usize> Domain<F, RATE> for VariableLength<F, RATE> {
+    type Padding = Vec<F>;
+
+    fn name() -> String {
+        "VariableLength".to_string()
+    }
+
+    fn initial_capacity_element() -> F {
+        <ConstantLength<1> as Domain<F, RATE>>::initial_capacity_element()
+    }
+
+    fn padding(input_len: usize) -> Self::Padding {
+        let k = input_len % RATE;
+        let mut result = Vec::new();
+
+        if k != 0 {
+            result.push(F::ONE);  
+        }
+        
+        result.extend(iter::repeat(F::ZERO).take(if k == 0 { 0 } else { RATE - k - 1}));
+        result
+    }
+}
+
 #[derive(Clone)]
 /// A Poseidon hash function, built around a sponge.
 pub struct Hash<
@@ -380,6 +410,23 @@ impl<F: PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usize, cons
         {
             self.sponge.absorb(value);
         }
+        self.sponge.finish_absorbing().squeeze()
+    }
+}
+
+impl<F: PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usize>
+    Hash<F, S, VariableLength<F, RATE>, T, RATE>
+{
+    /// Hashes the given input.
+    pub fn hash(mut self, message: &[F]) -> F {
+        for value in message {
+            self.sponge.absorb(*value);
+        }
+
+        for pad in <VariableLength<F, RATE> as Domain<F, RATE>>::padding(message.len()) {
+            self.sponge.absorb(pad);
+        }
+
         self.sponge.finish_absorbing().squeeze()
     }
 }
