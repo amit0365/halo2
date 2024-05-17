@@ -300,34 +300,6 @@ pub trait Domain<F: Field, const RATE: usize> {
     fn padding(input_len: usize) -> Self::Padding;
 }
 
-/// A Poseidon hash function used with variable input length.
-///
-/// Domain specified in [ePrint 2019/458 section 4.2](https://eprint.iacr.org/2019/458.pdf).
-#[derive(Clone, Copy, Debug)]
-pub struct VariableLength<const L: usize>;
-
-impl<F: PrimeField, const RATE: usize, const L: usize> Domain<F, RATE> for VariableLength<L> {
-    type Padding = iter::Take<iter::Chain<iter::Once<F>, iter::Repeat<F>>>;
-
-    fn name() -> String {
-        format!("VariableLength<{}>", L)
-    }
-
-    fn initial_capacity_element() -> F {
-        // Capacity value is $length \cdot 2^64 + (o-1)$ where o is the output length.
-        // We hard-code an output length of 1.
-        F::from_u128((L as u128) << 64)
-    }
-
-    fn padding(input_len: usize) -> Self::Padding {
-        let k = (input_len + RATE - 1) / RATE;
-        iter::once(F::ONE)
-            .chain(iter::repeat(F::ZERO))
-            .take(k * RATE - input_len)
-    }
-}
-
-
 /// A Poseidon hash function used with constant input length.
 ///
 /// Domain specified in [ePrint 2019/458 section 4.2](https://eprint.iacr.org/2019/458.pdf).
@@ -355,6 +327,36 @@ impl<F: PrimeField, const RATE: usize, const L: usize> Domain<F, RATE> for Const
         // that inputs of different lengths do not share the same permutation.
         let k = (L + RATE - 1) / RATE;
         iter::repeat(F::ZERO).take(k * RATE - L)
+    }
+}
+
+/// A Poseidon hash function used with variable input length, this is iden3's specifications
+#[derive(Clone, Copy, Debug)]
+pub struct VariableLength<F, const RATE: usize> {
+    _marker: PhantomData<F>,
+}
+
+impl<F: PrimeField, const RATE: usize> Domain<F, RATE> for VariableLength<F, RATE> {
+    type Padding = Vec<F>;
+
+    fn name() -> String {
+        "VariableLength".to_string()
+    }
+
+    fn initial_capacity_element() -> F {
+        <ConstantLength<1> as Domain<F, RATE>>::initial_capacity_element()
+    }
+
+    fn padding(input_len: usize) -> Self::Padding {
+        let k = input_len % RATE;
+        let mut result = Vec::new();
+
+        if k != 0 {
+            result.push(F::ONE);  
+        }
+        
+        result.extend(iter::repeat(F::ZERO).take(if k == 0 { 0 } else { RATE - k - 1}));
+        result
     }
 }
 
@@ -408,6 +410,23 @@ impl<F: PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usize, cons
         {
             self.sponge.absorb(value);
         }
+        self.sponge.finish_absorbing().squeeze()
+    }
+}
+
+impl<F: PrimeField, S: Spec<F, T, RATE>, const T: usize, const RATE: usize>
+    Hash<F, S, VariableLength<F, RATE>, T, RATE>
+{
+    /// Hashes the given input.
+    pub fn hash(mut self, message: &[F]) -> F {
+        for value in message {
+            self.sponge.absorb(*value);
+        }
+
+        for pad in <VariableLength<F, RATE> as Domain<F, RATE>>::padding(message.len()) {
+            self.sponge.absorb(pad);
+        }
+
         self.sponge.finish_absorbing().squeeze()
     }
 }

@@ -1,6 +1,7 @@
 use std::convert::TryInto;
 use std::iter;
 
+use ff::PrimeField;
 use halo2_proofs::{
     arithmetic::Field,
     circuit::{AssignedCell, Cell, Chip, Layouter, Region, Value},
@@ -11,7 +12,7 @@ use halo2_proofs::{
 };
 
 use super::{
-    primitives::{Absorbing, Domain, Mds, Spec, Squeezing, State},
+    primitives::{Absorbing, Domain, Mds, Spec, Squeezing, State, VariableLength},
     PaddedWord, PoseidonInstructions, PoseidonSpongeInstructions,
 };
 use crate::utilities::Var;
@@ -39,7 +40,7 @@ pub struct Pow5Config<F: Field, const WIDTH: usize, const RATE: usize> {
 ///
 /// The chip is implemented using a single round per row for full rounds, and two rounds
 /// per row for partial rounds.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Pow5Chip<F: Field, const WIDTH: usize, const RATE: usize> {
     config: Pow5Config<F, WIDTH, RATE>,
 }
@@ -421,7 +422,7 @@ impl<
 
 /// A word in the Poseidon state.
 #[derive(Clone, Debug)]
-pub struct StateWord<F: Field>(AssignedCell<F, F>);
+pub struct StateWord<F: Field>(pub AssignedCell<F, F>);
 
 impl<F: Field> From<StateWord<F>> for AssignedCell<F, F> {
     fn from(state_word: StateWord<F>) -> AssignedCell<F, F> {
@@ -606,6 +607,160 @@ impl<F: Field, const WIDTH: usize> Pow5State<F, WIDTH> {
 
         let next_state: Result<Vec<_>, _> = (0..WIDTH).map(next_state_word).collect();
         next_state.map(|next_state| Pow5State(next_state.try_into().unwrap()))
+    }
+}
+
+impl<F: PrimeField, const WIDTH: usize, const RATE: usize> Pow5Chip<F, WIDTH, RATE> {
+
+    pub fn initial_state(
+        &self,
+        mut layouter: impl Layouter<F>,
+    ) -> Result<State<StateWord<F>, WIDTH>, Error> {
+        let config = self.config();
+        let state = layouter.assign_region(
+            || format!("initial state for domain {}", VariableLength::<F, RATE>::name()),
+            |mut region| {
+                let mut state = Vec::with_capacity(WIDTH);
+                let mut load_state_word = |i: usize, value: F| -> Result<_, Error> {
+                    let var = region.assign_advice_from_constant(
+                        || format!("state_{i}"),
+                        config.state[i],
+                        0,
+                        value,
+                    )?;
+                    state.push(StateWord(var));
+
+                    Ok(())
+                };
+
+                for i in 0..RATE {
+                    load_state_word(i, F::ZERO)?;
+                }
+                load_state_word(RATE, VariableLength::<F, RATE>::initial_capacity_element())?;
+
+                Ok(state)
+            },
+        )?;
+
+        Ok(state.try_into().unwrap())
+    }
+
+    pub fn add_input(
+        &self,
+        mut layouter: impl Layouter<F>,
+        initial_state: &State<StateWord<F>, WIDTH>,
+        input: &[PaddedWord<F>; RATE],
+    ) -> Result<State<StateWord<F>, WIDTH>, Error> {
+        let config = self.config();
+        layouter.assign_region(
+            || format!("add input for domain {}", VariableLength::<F, RATE>::name()),
+            |mut region| {
+                config.s_pad_and_add.enable(&mut region, 1)?;
+
+                // Load the initial state into this region.
+                let load_state_word = |i: usize| {
+                    initial_state[i]
+                        .0
+                        .copy_advice(
+                            || format!("load state_{}", i),
+                            &mut region,
+                            config.state[i],
+                            0,
+                        )
+                        .map(StateWord)
+                };
+                let initial_state: Result<Vec<_>, Error> =
+                    (0..WIDTH).map(load_state_word).collect();
+                let initial_state = initial_state?;
+
+                // Load the input into this region.
+                let load_input_word = |i: usize| {
+                    let constraint_var = match input[i].clone() {
+                        PaddedWord::Message(word) => word,
+                        PaddedWord::Padding(padding_value) => region.assign_fixed(
+                            || format!("load pad_{}", i),
+                            config.rc_b[i],
+                            1,
+                            || Value::known(padding_value),
+                        )?,
+                        _ => panic!("Input is not padded"),
+                    };
+                    constraint_var
+                        .copy_advice(
+                            || format!("load input_{}", i),
+                            &mut region,
+                            config.state[i],
+                            1,
+                        )
+                        .map(StateWord)
+                };
+                let input: Result<Vec<_>, Error> = (0..RATE).map(load_input_word).collect();
+                let input = input?;
+
+                // Constrain the output.
+                let constrain_output_word = |i: usize| {
+                    let value = initial_state[i].0.value().copied()
+                        + input
+                            .get(i)
+                            .map(|word| word.0.value().cloned())
+                            // The capacity element is never altered by the input.
+                            .unwrap_or_else(|| Value::known(F::ZERO));
+                    region
+                        .assign_advice(
+                            || format!("load output_{}", i),
+                            config.state[i],
+                            2,
+                            || value,
+                        )
+                        .map(StateWord)
+                };
+
+                let output: Result<Vec<_>, Error> = (0..WIDTH).map(constrain_output_word).collect();
+                output.map(|output| output.try_into().unwrap())
+            },
+        )
+    }
+
+    pub fn permutation(
+        &self,
+        mut layouter: impl Layouter<F>,
+        initial_state: &State<StateWord<F>, WIDTH>,
+    ) -> Result<State<StateWord<F>, WIDTH>, Error> {
+        let config = self.config();
+
+        layouter.assign_region(
+            || "permute state",
+            |mut region| {
+                // Load the initial state into this region.
+                let state = Pow5State::load(&mut region, config, initial_state)?;
+
+                let state = (0..config.half_full_rounds)
+                    .try_fold(state, |res, r| res.full_round(&mut region, config, r, r))?;
+
+                let state = (0..config.half_partial_rounds).try_fold(state, |res, r| {
+                    res.partial_round(
+                        &mut region,
+                        config,
+                        config.half_full_rounds + 2 * r,
+                        config.half_full_rounds + r,
+                    )
+                })?;
+
+                let state = (0..config.half_full_rounds).try_fold(state, |res, r| {
+                    res.full_round(
+                        &mut region,
+                        config,
+                        config.half_full_rounds + 2 * config.half_partial_rounds + r,
+                        config.half_full_rounds + config.half_partial_rounds + r,
+                    )
+                })?;
+
+                Ok(state.0)
+
+                // let output: State<AssignedCell<F, F>, WIDTH> = state.0.iter().map(|word| word.0).collect::<Vec<_>>().try_into().unwrap();
+                // Ok(output)
+            },
+        )
     }
 }
 
@@ -832,8 +987,16 @@ mod tests {
     #[test]
     fn poseidon_hash() {
         let rng = OsRng;
+        use plotters::prelude::*;
 
-        let message = [Fp::random(rng), Fp::random(rng)];
+        let root = BitMapBackend::new("PoseidonChip.png", (1024, 768)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root
+            .titled("Poseidon Chip Layout", ("sans-serif", 60))
+            .unwrap();
+
+        //let message = [Fp::random(rng), Fp::random(rng)];
+        let message = [Fp::from(6), Fp::from(6)];
         let output =
             poseidon::Hash::<_, OrchardNullifier, ConstantLength<2>, 3, 2>::init().hash(message);
 
@@ -844,7 +1007,11 @@ mod tests {
             _spec: PhantomData,
         };
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()))
+        assert_eq!(prover.verify(), Ok(()));
+
+        halo2_proofs::dev::CircuitLayout::default()
+        .render(6, &circuit, &root)
+        .unwrap();
     }
 
     #[test]

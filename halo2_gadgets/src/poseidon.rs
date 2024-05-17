@@ -1,21 +1,31 @@
 //! The Poseidon algebraic hash function.
 
-use std::convert::TryInto;
+use std::{convert::TryInto, mem};
 use std::fmt;
 use std::marker::PhantomData;
 
 use ff::PrimeField;
 use group::ff::Field;
+use halo2_proofs::circuit::{SimpleFloorPlanner, Value};
+use halo2_proofs::dev::MockProver;
+use halo2_proofs::plonk::{Circuit, ConstraintSystem};
 use halo2_proofs::{
     circuit::{AssignedCell, Chip, Layouter},
     plonk::Error,
 };
+use primitives::{self as poseidonInline};
 
 mod pow5;
+use halo2curves::bn256::Fr as Fp;
 pub use pow5::{Pow5Chip, Pow5Config, StateWord};
 
 pub mod primitives;
+pub mod spec;
 use primitives::{Absorbing, ConstantLength, Domain, Spec, SpongeMode, Squeezing, State};
+use rand::rngs::OsRng;
+
+use self::primitives::VariableLength;
+use self::spec::{PoseidonSpec, R_F, R_P, SECURE_MDS};
 
 /// A word from the padded input to a Poseidon sponge.
 #[derive(Clone, Debug)]
@@ -120,10 +130,10 @@ fn poseidon_sponge<
 }
 
 /// A Poseidon sponge.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Sponge<
     F: Field,
-    PoseidonChip: PoseidonSpongeInstructions<F, S, D, T, RATE>,
+    PoseidonChip: PoseidonSpongeInstructions<F, S, D, T, RATE> + Clone,
     S: Spec<F, T, RATE>,
     M: SpongeMode,
     D: Domain<F, RATE>,
@@ -138,7 +148,7 @@ pub struct Sponge<
 
 impl<
         F: Field,
-        PoseidonChip: PoseidonSpongeInstructions<F, S, D, T, RATE>,
+        PoseidonChip: PoseidonSpongeInstructions<F, S, D, T, RATE> + Clone,
         S: Spec<F, T, RATE>,
         D: Domain<F, RATE>,
         const T: usize,
@@ -210,7 +220,7 @@ impl<
 
 impl<
         F: Field,
-        PoseidonChip: PoseidonSpongeInstructions<F, S, D, T, RATE>,
+        PoseidonChip: PoseidonSpongeInstructions<F, S, D, T, RATE> + Clone,
         S: Spec<F, T, RATE>,
         D: Domain<F, RATE>,
         const T: usize,
@@ -257,7 +267,7 @@ impl<
 #[derive(Debug)]
 pub struct Hash<
     F: Field,
-    PoseidonChip: PoseidonSpongeInstructions<F, S, D, T, RATE>,
+    PoseidonChip: PoseidonSpongeInstructions<F, S, D, T, RATE> + Clone,
     S: Spec<F, T, RATE>,
     D: Domain<F, RATE>,
     const T: usize,
@@ -268,7 +278,7 @@ pub struct Hash<
 
 impl<
         F: Field,
-        PoseidonChip: PoseidonSpongeInstructions<F, S, D, T, RATE>,
+        PoseidonChip: PoseidonSpongeInstructions<F, S, D, T, RATE> + Clone,
         S: Spec<F, T, RATE>,
         D: Domain<F, RATE>,
         const T: usize,
@@ -283,7 +293,7 @@ impl<
 
 impl<
         F: PrimeField,
-        PoseidonChip: PoseidonSpongeInstructions<F, S, ConstantLength<L>, T, RATE>,
+        PoseidonChip: PoseidonSpongeInstructions<F, S, ConstantLength<L>, T, RATE> + Clone,
         S: Spec<F, T, RATE>,
         const T: usize,
         const RATE: usize,
@@ -305,8 +315,267 @@ impl<
             self.sponge
                 .absorb(layouter.namespace(|| format!("absorb_{}", i)), value)?;
         }
-        self.sponge
+        let hash = self.sponge
             .finish_absorbing(layouter.namespace(|| "finish absorbing"))?
-            .squeeze(layouter.namespace(|| "squeeze"))
+            .squeeze(layouter.namespace(|| "squeeze"));
+        hash
     }
 }
+
+/// Statefull Poseidon hasher.
+#[derive(Clone, Debug)]
+pub struct PoseidonHash<F: PrimeField, const T: usize, const RATE: usize> {
+    spec: PoseidonSpec,
+    state: State<F, T>,
+    init_state: State<F, T>,
+    absorbing: Vec<F>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PoseidonState<F: PrimeField, const T: usize, const RATE: usize> {
+    pub(crate) s: [AssignedCell<F, F>; T],
+}
+
+// impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE> {
+//     pub fn default() -> Self {
+//         let mut default_state = [F::ZERO; T];
+//         // from Section 4.2 of https://eprint.iacr.org/2019/458.pdf
+//         // • Variable-Input-Length Hashing. The capacity value is 2^64 + (o−1) where o the output length.
+//         // for our transcript use cases, o = 1
+//         default_state[0] = F::from_u128(1u128 << 64);
+//         Self { s: default_state.map(|f| ctx.load_constant(f)) }
+//     }
+// }
+
+#[derive(Clone, Debug)]
+/// Poseidon sponge. This is stateful.
+pub struct PoseidonSpongeChip<F: PrimeField, const T: usize, const RATE: usize> {
+    chip: Pow5Chip<F, T, RATE>,
+    init_state: State<StateWord<F>, T>,
+    state: State<StateWord<F>, T>,
+    spec: PoseidonSpec,
+    absorbing: Vec<AssignedCell<F, F>>,
+}
+
+impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonSpongeChip<F, T, RATE> {
+    /// Create new Poseidon hasher.
+    pub fn new<const R_F: usize, const R_P: usize, const SECURE_MDS: usize>(
+        chip: Pow5Chip<F,T, RATE >, layouter: impl Layouter<F>) -> Self {
+        let init_state = chip.initial_state(layouter).unwrap();
+        let state = init_state.clone();
+        Self {
+            chip,
+            init_state,
+            state,
+            spec: PoseidonSpec,//::new::<R_F, R_P, SECURE_MDS>(),
+            absorbing: Vec::new(),
+        }
+    }
+
+    // /// Initialize a poseidon hasher from an existing spec.
+    // pub fn from_spec(ctx: &mut Context<F>, spec: OptimizedPoseidonSpec<F, T, RATE>) -> Self {
+    //     let init_state = PoseidonState::default(ctx);
+    //     Self { spec, state: init_state.clone(), init_state, absorbing: Vec::new() }
+    // }
+
+    /// Reset state to default and clear the buffer.
+    pub fn clear(&mut self) {
+        self.state = self.init_state.clone();
+        self.absorbing.clear();
+    }
+
+    /// Store given `elements` into buffer.
+    pub fn update(&mut self, elements: &[AssignedCell<F, F>]) {
+        self.absorbing.extend_from_slice(elements);
+    }
+
+    /// Consume buffer and perform permutation, then output second element of
+    /// state.
+    pub fn squeeze(
+        &mut self,
+        mut layouter: impl Layouter<F>,
+    ) -> AssignedCell<F, F> {
+        let input_elements = mem::take(&mut self.absorbing);
+
+        for (i, input_chunk) in input_elements.chunks(RATE).enumerate() {
+            let chunk_len = input_chunk.len();
+            if chunk_len < RATE {
+
+                let mut padded_chunk = input_chunk.iter().cloned().map(|cell| PaddedWord::Message(cell.clone())).collect::<Vec<_>>();
+                    padded_chunk.extend(<VariableLength<F, RATE> as Domain<F, RATE>>::padding(chunk_len).iter().cloned().map(PaddedWord::Padding));
+
+                let padded_chunk_array: [PaddedWord<F>; RATE] = padded_chunk.try_into().unwrap();
+                self.state = self.chip.add_input(layouter.namespace(|| format!("absorb_{i}")), &self.init_state, &padded_chunk_array).unwrap();
+                self.state = self.chip.permutation(layouter.namespace(|| format!("absorb_{i}")), &self.state).unwrap();
+
+            } else {
+
+                let input_chunk: [PaddedWord<F>; RATE] = input_chunk.iter().cloned().map(|cell| PaddedWord::Message(cell.clone())).collect::<Vec<_>>().try_into().unwrap();
+                self.state = self.chip.add_input(layouter.namespace(|| format!("absorb_{i}")), &self.init_state, &input_chunk).unwrap();
+                self.state = self.chip.permutation(layouter.namespace(|| format!("absorb_{i}")), &self.state).unwrap();
+            }
+        }
+
+        let hash = self.state[1].0.clone();
+        self.update(&[hash.clone()]);
+        hash
+    }
+}
+
+    struct HashCircuit<
+        S: Spec<Fp, WIDTH, RATE>,
+        const WIDTH: usize,
+        const RATE: usize,
+        const L: usize,
+    > {
+        message: Value<[Fp; L]>,
+        // For the purpose of this test, witness the result.
+        // TODO: Move this into an instance column.
+        output: Value<Fp>,
+        _spec: PhantomData<S>,
+    }
+
+    impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: usize>
+        Circuit<Fp> for HashCircuit<S, WIDTH, RATE, L>
+    {
+        type Config = Pow5Config<Fp, WIDTH, RATE>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = ();
+
+        fn without_witnesses(&self) -> Self {
+            Self {
+                message: Value::unknown(),
+                output: Value::unknown(),
+                _spec: PhantomData,
+            }
+        }
+
+        fn configure(meta: &mut ConstraintSystem<Fp>) -> Pow5Config<Fp, WIDTH, RATE> {
+            let state = (0..WIDTH).map(|_| meta.advice_column()).collect::<Vec<_>>();
+            let partial_sbox = meta.advice_column();
+
+            let rc_a = (0..WIDTH).map(|_| meta.fixed_column()).collect::<Vec<_>>();
+            let rc_b = (0..WIDTH).map(|_| meta.fixed_column()).collect::<Vec<_>>();
+
+            meta.enable_constant(rc_b[0]);
+
+            Pow5Chip::configure::<S>(
+                meta,
+                state.try_into().unwrap(),
+                partial_sbox,
+                rc_a.try_into().unwrap(),
+                rc_b.try_into().unwrap(),
+            )
+        }
+
+        fn synthesize(
+            &self,
+            config: Pow5Config<Fp, WIDTH, RATE>,
+            mut layouter: impl Layouter<Fp>,
+        ) -> Result<(), Error> {
+            let chip = Pow5Chip::construct(config.clone());
+
+            let message = layouter.assign_region(
+                || "load message",
+                |mut region| {
+                    let mut message_word = |i: usize, j: usize| {
+                        let idx = j * RATE + i;
+                        let value = self.message.map(|message_vals| message_vals[idx]);
+                        region.assign_advice(
+                            || format!("load message_{}", i),
+                            config.state[i],
+                            j,
+                            || value,
+                        )
+                    };
+
+                    let message: Result<Vec<_>, Error> = ((0..L).map(|i| i % RATE)).zip((0..L).map(|i| i / RATE)).map(|(i, j)| message_word(i, j)).collect();
+                    Ok(message.unwrap())
+                    // Ok(message?.try_into().unwrap())
+                },
+            )?;
+
+            // let value = vec![Fp::ZERO; L];
+            // let message = region.assign_advice(
+            //     || "load message",
+            //     config.state[0],
+            //     0,
+            //     || self.message,
+            // )?;
+
+            let mut transcript = PoseidonSpongeChip::new::<R_F, R_P, SECURE_MDS>(
+                chip,
+                layouter.namespace(|| "init"),
+            );
+            transcript.update(&message);
+            let output = transcript.squeeze(layouter.namespace(|| "hash"));
+            transcript.update(&message);
+            let output2 = transcript.squeeze(layouter.namespace(|| "hash2"));
+            println!("output: {:?}", output);
+            println!("output2: {:?}", output2);
+            // layouter.assign_region(
+            //     || "constrain output",
+            //     |mut region| {
+            //         let expected_var = region.assign_advice(
+            //             || "load output",
+            //             config.state[0],
+            //             0,
+            //             || self.output,
+            //         )?;
+            //         region.constrain_equal(output.cell(), expected_var.cell())
+            //     },
+            // )
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn poseidon_hash() {
+
+        let rng = OsRng;
+        let message = [Fp::from(6), Fp::from(5), Fp::from(4), Fp::from(3), Fp::from(2)];
+        let output =
+            poseidonInline::Hash::<_, PoseidonSpec, VariableLength<Fp, 2>, 3, 2>::init().hash(&message);
+        println!("outputInline: {:?}", output);
+
+        let k = 9;
+        let circuit = HashCircuit::<PoseidonSpec, 3, 2, 5> {
+            message: Value::known(message),
+            output: Value::known(output),
+            _spec: PhantomData,
+        };
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_eq!(prover.verify(), Ok(()));
+
+    }
+
+    #[cfg(feature = "test-dev-graph")]
+    #[test]
+    fn poseidon_hash_graph() {
+        use plotters::prelude::*;
+
+        let root = BitMapBackend::new("PoseidonChip.png", (1024, 768)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root
+            .titled("Poseidon Chip Layout", ("sans-serif", 60))
+            .unwrap();
+
+        let rng = OsRng;
+        let message = [Fp::from(6), Fp::from(5), Fp::from(4), Fp::from(3), Fp::from(2)];
+        let output =
+            poseidonInline::Hash::<_, PoseidonSpec, VariableLength<Fp, 2>, 3, 2>::init().hash(&message);
+        println!("outputInline: {:?}", output);
+
+        let k = 8;
+        let circuit = HashCircuit::<PoseidonSpec, 3, 2, 5> {
+            message: Value::known(message),
+            output: Value::known(output),
+            _spec: PhantomData,
+        };
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        assert_eq!(prover.verify(), Ok(()));
+
+        halo2_proofs::dev::CircuitLayout::default()
+        .render(8, &circuit, &root)
+        .unwrap();
+    }
