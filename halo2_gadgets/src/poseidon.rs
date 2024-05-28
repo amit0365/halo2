@@ -485,7 +485,7 @@ impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonSpongeChip<F, T, 
     pub fn squeeze(
         &mut self,
         mut layouter: impl Layouter<F>,
-    ) -> AssignedCell<F, F> {
+    ) -> Result<AssignedCell<F, F>, Error> {
         let input_elements = mem::take(&mut self.absorbing);
 
         for (i, input_chunk) in input_elements.chunks(RATE).enumerate() {
@@ -496,20 +496,20 @@ impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonSpongeChip<F, T, 
                     padded_chunk.extend(<VariableLength<F, RATE> as Domain<F, RATE>>::padding(chunk_len).iter().cloned().map(PaddedWord::Padding));
 
                 let padded_chunk_array: [PaddedWord<F>; RATE] = padded_chunk.try_into().unwrap();
-                self.state = self.chip.add_input(layouter.namespace(|| format!("absorb_{i}")), &self.init_state, &padded_chunk_array).unwrap();
-                self.state = self.chip.permutation(layouter.namespace(|| format!("absorb_{i}")), &self.state).unwrap();
+                self.state = self.chip.add_input(layouter.namespace(|| format!("absorb_{i}")), &self.init_state, &padded_chunk_array)?;
+                self.state = self.chip.permutation(layouter.namespace(|| format!("absorb_{i}")), &self.state)?;
 
             } else {
 
                 let input_chunk: [PaddedWord<F>; RATE] = input_chunk.iter().cloned().map(|cell| PaddedWord::Message(cell.clone())).collect::<Vec<_>>().try_into().unwrap();
-                self.state = self.chip.add_input(layouter.namespace(|| format!("absorb_{i}")), &self.init_state, &input_chunk).unwrap();
-                self.state = self.chip.permutation(layouter.namespace(|| format!("absorb_{i}")), &self.state).unwrap();
+                self.state = self.chip.add_input(layouter.namespace(|| format!("absorb_{i}")), &self.init_state, &input_chunk)?;
+                self.state = self.chip.permutation(layouter.namespace(|| format!("absorb_{i}")), &self.state)?;
             }
         }
 
         let hash = self.state[1].0.clone();
         self.update(&[hash.clone()]);
-        hash
+        Ok(hash)
     }
 }
     struct HashCircuit<
