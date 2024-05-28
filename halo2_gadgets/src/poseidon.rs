@@ -4,7 +4,7 @@ use std::{convert::TryInto, mem};
 use std::fmt;
 use std::marker::PhantomData;
 
-use ff::PrimeField;
+use ff::{FromUniformBytes, PrimeField};
 use group::ff::Field;
 use halo2_proofs::circuit::{SimpleFloorPlanner, Value};
 use halo2_proofs::dev::MockProver;
@@ -13,7 +13,7 @@ use halo2_proofs::{
     circuit::{AssignedCell, Chip, Layouter},
     plonk::Error,
 };
-use primitives::{self as poseidonInline};
+use primitives::{self as poseidonInline, generate_constants, permute};
 
 mod pow5;
 use halo2curves::bn256::Fr as Fp;
@@ -325,11 +325,95 @@ impl<
 /// Statefull Poseidon hasher.
 #[derive(Clone, Debug)]
 pub struct PoseidonHash<F: PrimeField, const T: usize, const RATE: usize> {
-    spec: PoseidonSpec,
-    state: State<F, T>,
     init_state: State<F, T>,
+    state: State<F, T>,
+    spec: PoseidonSpec,
     absorbing: Vec<F>,
 }
+
+impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonHash<F, T, RATE> 
+where
+    F: FromUniformBytes<64> + Ord,
+{
+
+    /// Create new Poseidon hasher.
+    pub fn new<const R_F: usize, const R_P: usize, const SECURE_MDS: usize>() -> Self {
+        let init_state = [F::ZERO; T];
+        Self {
+            spec: PoseidonSpec,
+            state: init_state,
+            init_state,
+            absorbing: Vec::new(),
+        }
+    }
+
+    /// Initialize a poseidon hasher from an existing spec.
+    pub fn from_spec(spec: PoseidonSpec) -> Self {
+        let init_state = [F::ZERO; T];
+        Self { spec, state: init_state, init_state, absorbing: Vec::new() }
+    }
+
+    /// Reset state to default and clear the buffer.
+    pub fn clear(&mut self) {
+        self.state = self.init_state;
+        self.absorbing.clear();
+    }
+
+    pub fn permutation(&mut self) {
+        let (round_constants, mds, _mds_inv) 
+            = generate_constants::<F, PoseidonSpec, T, RATE>();
+        permute::<F, PoseidonSpec, T, RATE>(&mut self.state, &mds, &round_constants);
+    }
+
+    /// Appends elements to the absorption line updates state while `RATE` is
+    /// full
+    pub fn update(&mut self, elements: &[F]) {
+        let mut input_elements = self.absorbing.clone();
+        input_elements.extend_from_slice(elements);
+
+        for chunk in input_elements.chunks(RATE) {
+            if chunk.len() < RATE {
+                // Must be the last iteration of this update. Feed unpermutaed inputs to the
+                // absorbation line
+                self.absorbing = chunk.to_vec();
+            } else {
+                // Add new chunk of inputs for the next permutation cycle.
+                for (input_element, state) in chunk.iter().zip(self.state.iter_mut().skip(1)) {
+                    state.add_assign(input_element);
+                }
+                // Perform intermediate permutation
+                self.permutation();
+                // Flush the absorption line
+                self.absorbing.clear();
+            }
+        }
+    }
+
+    /// Results a single element by absorbing already added inputs
+    pub fn squeeze(&mut self) -> F {
+        let mut last_chunk = self.absorbing.clone();
+        {
+            // Expect padding offset to be in [0, RATE)
+            debug_assert!(last_chunk.len() < RATE);
+        }
+        // Add the finishing sign of the variable length hashing. Note that this mut
+        // also apply when absorbing line is empty
+        last_chunk.push(F::ONE);
+        // Add the last chunk of inputs to the state for the final permutation cycle
+
+        for (input_element, state) in last_chunk.iter().zip(self.state.iter_mut().skip(1)) {
+            state.add_assign(input_element);
+        }
+
+        // Perform final permutation
+        self.permutation();
+        // Flush the absorption line
+        self.absorbing.clear();
+        // Returns the challenge while preserving internal state
+        self.state[1]
+    }
+}
+
 
 #[derive(Clone, Debug)]
 pub(crate) struct PoseidonState<F: PrimeField, const T: usize, const RATE: usize> {
@@ -428,7 +512,6 @@ impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonSpongeChip<F, T, 
         hash
     }
 }
-
     struct HashCircuit<
         S: Spec<Fp, WIDTH, RATE>,
         const WIDTH: usize,
@@ -538,12 +621,17 @@ impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonSpongeChip<F, T, 
 
     #[test]
     fn poseidon_hash() {
-
+        // all three are diff wtf?
         let rng = OsRng;
         let message = [Fp::from(6), Fp::from(5), Fp::from(4), Fp::from(3), Fp::from(2)];
         let output =
-            poseidonInline::Hash::<_, PoseidonSpec, VariableLength<Fp, 2>, 3, 2>::init().hash(&message);
+        poseidonInline::Hash::<_, PoseidonSpec, VariableLength<Fp, 2>, 3, 2>::init().hash(&message);
         println!("outputInline: {:?}", output);
+
+        let mut poseidonInline = PoseidonHash::<Fp, 3, 2>::new::<R_F, R_P, SECURE_MDS>();
+        poseidonInline.update(&message);
+        let output = poseidonInline.squeeze();
+        println!("poseidonhash: {:?}", output);
 
         let k = 9;
         let circuit = HashCircuit::<PoseidonSpec, 3, 2, 5> {
