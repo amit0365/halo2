@@ -314,6 +314,8 @@ pub struct MockProver<F: Field> {
     usable_rows: Range<usize>,
 
     current_phase: sealed::Phase,
+
+    witness_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -466,6 +468,8 @@ impl<F: Field> Assignment<F> for MockProver<F> {
                     .or_default();
             }
         }
+
+        self.witness_count += 1;
 
         match to().into_field().evaluate().assign() {
             Ok(to) => {
@@ -713,6 +717,7 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
             permutation,
             usable_rows: 0..usable_rows,
             current_phase: FirstPhase.to_sealed(),
+            witness_count: 0,
         };
 
         for current_phase in prover.cs.phases() {
