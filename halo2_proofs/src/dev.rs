@@ -316,6 +316,8 @@ pub struct MockProver<F: Field> {
     current_phase: sealed::Phase,
 
     pub witness_count: usize,
+
+    pub copy_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -553,7 +555,7 @@ impl<F: Field> Assignment<F> for MockProver<F> {
             self.usable_rows,
             self.k,
         );
-
+        self.copy_count += 1;
         self.permutation
             .copy(left_column, left_row, right_column, right_row)
     }
@@ -718,6 +720,7 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
             usable_rows: 0..usable_rows,
             current_phase: FirstPhase.to_sealed(),
             witness_count: 0,
+            copy_count: 0,
         };
 
         for current_phase in prover.cs.phases() {
