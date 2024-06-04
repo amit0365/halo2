@@ -315,7 +315,7 @@ pub struct MockProver<F: Field> {
 
     current_phase: sealed::Phase,
 
-    witness_count: usize,
+    pub witness_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
