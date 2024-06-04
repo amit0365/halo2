@@ -37,11 +37,11 @@ use crate::{
 /// ```
 #[derive(Debug, Default)]
 pub struct CircuitLayout {
-    hide_labels: bool,
-    mark_equality_cells: bool,
-    show_equality_constraints: bool,
-    view_width: Option<Range<usize>>,
-    view_height: Option<Range<usize>>,
+    pub hide_labels: bool,
+    pub mark_equality_cells: bool,
+    pub show_equality_constraints: bool,
+    pub view_width: Option<Range<usize>>,
+    pub view_height: Option<Range<usize>>,
 }
 
 impl CircuitLayout {
