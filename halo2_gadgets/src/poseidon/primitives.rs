@@ -167,11 +167,11 @@ pub trait SpongeMode: private::SealedSpongeMode {}
 
 /// The absorbing state of the `Sponge`.
 #[derive(Debug, Clone)]
-pub struct Absorbing<F, const RATE: usize>(pub(crate) SpongeRate<F, RATE>);
+pub struct Absorbing<F, const RATE: usize>(pub SpongeRate<F, RATE>);
 
 /// The squeezing state of the `Sponge`.
 #[derive(Debug)]
-pub struct Squeezing<F, const RATE: usize>(pub(crate) SpongeRate<F, RATE>);
+pub struct Squeezing<F, const RATE: usize>(pub SpongeRate<F, RATE>);
 
 impl<F, const RATE: usize> SpongeMode for Absorbing<F, RATE> {}
 impl<F, const RATE: usize> SpongeMode for Squeezing<F, RATE> {}
