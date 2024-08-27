@@ -177,7 +177,7 @@ impl<F, const RATE: usize> SpongeMode for Absorbing<F, RATE> {}
 impl<F, const RATE: usize> SpongeMode for Squeezing<F, RATE> {}
 
 impl<F: fmt::Debug, const RATE: usize> Absorbing<F, RATE> {
-    pub(crate) fn init_with(val: F) -> Self {
+    pub fn init_with(val: F) -> Self {
         Self(
             iter::once(Some(val))
                 .chain((1..RATE).map(|_| None))
