@@ -23,7 +23,7 @@ pub use p128pow5t3::P128Pow5T3;
 use grain::SboxType;
 
 /// The type used to hold permutation state.
-pub(crate) type State<F, const T: usize> = [F; T];
+pub type State<F, const T: usize> = [F; T];
 
 /// The type used to hold sponge rate.
 pub(crate) type SpongeRate<F, const RATE: usize> = [Option<F>; RATE];
