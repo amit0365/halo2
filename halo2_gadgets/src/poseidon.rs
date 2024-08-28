@@ -3,7 +3,7 @@
 use std::{convert::TryInto, mem};
 use std::fmt;
 use std::marker::PhantomData;
-
+use std::time::Instant;
 use ff::{FromUniformBytes, PrimeField};
 use group::ff::Field;
 use halo2_proofs::circuit::{SimpleFloorPlanner, Value};
