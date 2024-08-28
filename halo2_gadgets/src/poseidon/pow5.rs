@@ -67,8 +67,8 @@ impl<F: Field, const WIDTH: usize, const RATE: usize> Pow5Chip<F, WIDTH, RATE> {
         // This gadget requires R_F and R_P to be even.
         assert!(S::full_rounds() & 1 == 0);
         println!("S::full_rounds() = {}", S::full_rounds());
-        assert!(S::partial_rounds() & 1 == 0);
         println!("S::partial_rounds() = {}", S::partial_rounds());
+        assert!(S::partial_rounds() & 1 == 0);
         let half_full_rounds = S::full_rounds() / 2;
         let half_partial_rounds = S::partial_rounds() / 2;
         let (round_constants, m_reg, m_inv, _) = S::constants();
