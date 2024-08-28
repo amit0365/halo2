@@ -316,13 +316,10 @@ impl<
             self.sponge
                 .absorb(layouter.namespace(|| format!("absorb_{}", i)), value)?;
         }
-        println!("Time taken to absorb: {:?}", time.elapsed());
-        let time = Instant::now();
-        let hash = self.sponge
+
+        self.sponge
             .finish_absorbing(layouter.namespace(|| "finish absorbing"))?
-            .squeeze(layouter.namespace(|| "squeeze"));
-        println!("Time taken to squeeze: {:?}", time.elapsed());
-        hash
+            .squeeze(layouter.namespace(|| "squeeze"))
     }
 }
 
