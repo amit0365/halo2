@@ -306,6 +306,7 @@ impl<
         mut layouter: impl Layouter<F>,
         message: [AssignedCell<F, F>; L],
     ) -> Result<AssignedCell<F, F>, Error> {
+        let time = Instant::now();
         for (i, value) in message
             .into_iter()
             .map(PaddedWord::Message)
@@ -315,9 +316,12 @@ impl<
             self.sponge
                 .absorb(layouter.namespace(|| format!("absorb_{}", i)), value)?;
         }
+        println!("Time taken to absorb: {:?}", time.elapsed());
+        let time = Instant::now();
         let hash = self.sponge
             .finish_absorbing(layouter.namespace(|| "finish absorbing"))?
             .squeeze(layouter.namespace(|| "squeeze"));
+        println!("Time taken to squeeze: {:?}", time.elapsed());
         hash
     }
 }
