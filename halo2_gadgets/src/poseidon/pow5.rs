@@ -69,7 +69,7 @@ impl<F: Field, const WIDTH: usize, const RATE: usize> Pow5Chip<F, WIDTH, RATE> {
         assert!(S::partial_rounds() & 1 == 0);
         let half_full_rounds = S::full_rounds() / 2;
         let half_partial_rounds = S::partial_rounds() / 2;
-        let (round_constants, m_reg, m_inv) = S::constants();
+        let (round_constants, m_reg, m_inv, _) = S::constants();
 
         // This allows state words to be initialized (by constraining them equal to fixed
         // values), and used in a permutation from an arbitrary region. rc_a is used in

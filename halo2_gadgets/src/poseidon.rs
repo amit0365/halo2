@@ -364,7 +364,7 @@ where
     }
 
     pub fn permutation(&mut self) {
-        let (round_constants, mds, _mds_inv) 
+        let (round_constants, mds, _mds_inv, _) 
             = generate_constants::<F, PoseidonSpec, T, RATE>();
         permute::<F, PoseidonSpec, T, RATE>(&mut self.state, &mds, &round_constants);
     }

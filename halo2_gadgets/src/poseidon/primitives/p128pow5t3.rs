@@ -29,11 +29,12 @@ impl Spec<Fp, 3, 2> for P128Pow5T3 {
         unimplemented!()
     }
 
-    fn constants() -> (Vec<[Fp; 3]>, Mds<Fp, 3>, Mds<Fp, 3>) {
+    fn constants() -> (Vec<[Fp; 3]>, Mds<Fp, 3>, Mds<Fp, 3>, [[Fp; 3]; 1]) {
         (
             super::fp::ROUND_CONSTANTS[..].to_vec(),
             super::fp::MDS,
             super::fp::MDS_INV,
+            [super::fp::MDS_INV[0]],
         )
     }
 }
@@ -55,11 +56,12 @@ impl Spec<Fq, 3, 2> for P128Pow5T3 {
         unimplemented!()
     }
 
-    fn constants() -> (Vec<[Fq; 3]>, Mds<Fq, 3>, Mds<Fq, 3>) {
+    fn constants() -> (Vec<[Fq; 3]>, Mds<Fq, 3>, Mds<Fq, 3>, [[Fq; 3]; 1]) {
         (
             super::fq::ROUND_CONSTANTS[..].to_vec(),
             super::fq::MDS,
             super::fq::MDS_INV,
+            [super::fq::MDS_INV[0]],
         )
     }
 }

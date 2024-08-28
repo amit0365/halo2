@@ -2,7 +2,7 @@ use ff::{FromUniformBytes, PrimeField};
 use super::primitives::{generate_constants, Spec};
 
 pub const R_F: usize = 8;
-pub const R_P: usize = 60;
+pub const R_P: usize = 57;
 pub const SECURE_MDS: usize = 0;
 
 
@@ -34,7 +34,7 @@ F: FromUniformBytes<64> + Ord,
         SECURE_MDS
     }
 
-    fn constants() -> (Vec<[F; T]>, Mds<F, T>, Mds<F, T>) {
+    fn constants() -> (Vec<[F; T]>, Mds<F, T>, Mds<F, T>, [[F; T]; 1]) {
         generate_constants::<F, PoseidonSpec, T, R>()
     }
 }

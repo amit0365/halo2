@@ -52,7 +52,7 @@ pub trait Spec<F: Field, const T: usize, const RATE: usize>: fmt::Debug {
     fn secure_mds() -> usize;
 
     /// Generates `(round_constants, mds, mds^-1)` corresponding to this specification.
-    fn constants() -> (Vec<[F; T]>, Mds<F, T>, Mds<F, T>);
+    fn constants() -> (Vec<[F; T]>, Mds<F, T>, Mds<F, T>, [[F; T]; 1]);
 }
 
 /// Generates `(round_constants, mds, mds^-1)` corresponding to this specification.
@@ -61,7 +61,7 @@ pub fn generate_constants<
     S: Spec<F, T, RATE>,
     const T: usize,
     const RATE: usize,
->() -> (Vec<[F; T]>, Mds<F, T>, Mds<F, T>) {
+>() -> (Vec<[F; T]>, Mds<F, T>, Mds<F, T>, [[F; T]; 1]) {
     let r_f = S::full_rounds();
     let r_p = S::partial_rounds();
 
@@ -82,7 +82,7 @@ pub fn generate_constants<
 
     let (mds, mds_inv) = mds::generate_mds::<F, T>(&mut grain, S::secure_mds());
 
-    (round_constants, mds, mds_inv)
+    (round_constants, mds, mds_inv, [mds_inv[0]])
 }
 
 /// Runs the Poseidon permutation on the given state.
@@ -209,7 +209,7 @@ impl<F: Field, S: Spec<F, T, RATE>, const T: usize, const RATE: usize>
 {
     /// Constructs a new sponge for the given Poseidon specification.
     pub(crate) fn new(initial_capacity_element: F) -> Self {
-        let (round_constants, mds_matrix, _) = S::constants();
+        let (round_constants, mds_matrix, _, _) = S::constants();
 
         let mode = Absorbing([None; RATE]);
         let mut state = [F::ZERO; T];
