@@ -34,7 +34,7 @@ F: FromUniformBytes<64> + Ord,
         SECURE_MDS
     }
 
-    fn constants() -> (Vec<[F; T]>, Mds<F, T>, Mds<F, T>, [[F; T]; 1]) {
+    fn constants() -> (Vec<[F; T]>, Mds<F, T>, Mds<F, T>, [F; T]) {
         generate_constants::<F, PoseidonSpec, T, R>()
     }
 }
