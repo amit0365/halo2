@@ -22,6 +22,8 @@ pub use p128pow5t3::P128Pow5T3;
 
 use grain::SboxType;
 
+use super::spec::PoseidonSpec;
+
 /// The type used to hold permutation state.
 pub type State<F, const T: usize> = [F; T];
 

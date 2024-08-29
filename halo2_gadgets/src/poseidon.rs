@@ -328,7 +328,7 @@ impl<
 pub struct PoseidonHash<F: PrimeField, const T: usize, const RATE: usize> {
     init_state: State<F, T>,
     state: State<F, T>,
-    spec: PoseidonSpec,
+    spec: PoseidonSpec<F, T, RATE>,
     absorbing: Vec<F>,
 }
 
@@ -341,7 +341,7 @@ where
     pub fn new<const R_F: usize, const R_P: usize, const SECURE_MDS: usize>() -> Self {
         let init_state = [F::ZERO; T];
         Self {
-            spec: PoseidonSpec,
+            spec: PoseidonSpec::new(),
             state: init_state,
             init_state,
             absorbing: Vec::new(),
@@ -349,7 +349,7 @@ where
     }
 
     /// Initialize a poseidon hasher from an existing spec.
-    pub fn from_spec(spec: PoseidonSpec) -> Self {
+    pub fn from_spec(spec: PoseidonSpec<F, T, RATE>) -> Self {
         let init_state = [F::ZERO; T];
         Self { spec, state: init_state, init_state, absorbing: Vec::new() }
     }
@@ -361,9 +361,7 @@ where
     }
 
     pub fn permutation(&mut self) {
-        let (round_constants, mds, _mds_inv, _) 
-            = generate_constants::<F, PoseidonSpec, T, RATE>();
-        permute::<F, PoseidonSpec, T, RATE>(&mut self.state, &mds, &round_constants);
+        permute::<F, PoseidonSpec<F, T, RATE>, T, RATE>(&mut self.state, &self.spec.mds_matrix, &self.spec.round_constants);
     }
 
     /// Appends elements to the absorption line updates state while `RATE` is
@@ -434,15 +432,18 @@ pub(crate) struct PoseidonState<F: PrimeField, const T: usize, const RATE: usize
 
 #[derive(Clone, Debug)]
 /// Poseidon sponge. This is stateful.
-pub struct PoseidonSpongeChip<F: PrimeField, const T: usize, const RATE: usize> {
+pub struct PoseidonSpongeChip<F: Field, const T: usize, const RATE: usize> {
     pub chip: Pow5Chip<F, T, RATE>,
     init_state: State<StateWord<F>, T>,
     state: State<StateWord<F>, T>,
-    spec: PoseidonSpec,
+    spec: PoseidonSpec<F, T, RATE>,
     absorbing: Vec<AssignedCell<F, F>>,
 }
 
-impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonSpongeChip<F, T, RATE> {
+impl<F, const T: usize, const RATE: usize> PoseidonSpongeChip<F, T, RATE> 
+where
+    F: FromUniformBytes<64> + Ord + Field,
+{
     /// Create new Poseidon hasher.
     pub fn new<const R_F: usize, const R_P: usize, const SECURE_MDS: usize>(
         chip: Pow5Chip<F,T, RATE >, layouter: impl Layouter<F>) -> Self {
@@ -452,13 +453,13 @@ impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonSpongeChip<F, T, 
             chip,
             init_state,
             state,
-            spec: PoseidonSpec,//::new::<R_F, R_P, SECURE_MDS>(),
+            spec: PoseidonSpec::new(),
             absorbing: Vec::new(),
         }
     }
 
     /// Initialize a poseidon hasher from an existing spec.
-    pub fn from_spec(chip: Pow5Chip<F, T, RATE>, layouter: impl Layouter<F>, spec: PoseidonSpec) -> Self {
+    pub fn from_spec(chip: Pow5Chip<F, T, RATE>, layouter: impl Layouter<F>, spec: PoseidonSpec<F, T, RATE>) -> Self {
         let init_state = chip.initial_state(layouter).unwrap();
         let state = init_state.clone();
         Self {
