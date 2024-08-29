@@ -2,7 +2,7 @@ use ff::{FromUniformBytes, PrimeField};
 use super::primitives::{generate_constants, Spec};
 
 pub const R_F: usize = 8;
-pub const R_P: usize = 57;
+pub const R_P: usize = 56;
 pub const SECURE_MDS: usize = 0;
 
 
