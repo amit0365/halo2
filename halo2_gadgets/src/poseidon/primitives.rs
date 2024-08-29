@@ -226,6 +226,20 @@ impl<F: Field, S: Spec<F, T, RATE>, const T: usize, const RATE: usize>
         }
     }
 
+    pub(crate) fn from_spec(spec: PoseidonSpec<F, T, RATE>, initial_capacity_element: F) -> Self {
+        let mode = Absorbing([None; RATE]);
+        let mut state = [F::ZERO; T];
+        state[RATE] = initial_capacity_element;
+
+        Sponge {
+            mode,
+            state,
+            mds_matrix: spec.mds_matrix,
+            round_constants: spec.round_constants,
+            _marker: PhantomData::default(),
+        }
+    }
+
     /// Absorbs an element into the sponge.
     pub(crate) fn absorb(&mut self, value: F) {
         for entry in self.mode.0.iter_mut() {
@@ -396,6 +410,13 @@ impl<F: Field, S: Spec<F, T, RATE>, D: Domain<F, RATE>, const T: usize, const RA
     pub fn init() -> Self {
         Hash {
             sponge: Sponge::new(D::initial_capacity_element()),
+            _domain: PhantomData::default(),
+        }
+    }
+
+    pub fn from_spec(spec: PoseidonSpec<F, T, RATE>) -> Self {
+        Hash {
+            sponge: Sponge::from_spec(spec, D::initial_capacity_element()),
             _domain: PhantomData::default(),
         }
     }
