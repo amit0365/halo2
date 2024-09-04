@@ -74,7 +74,9 @@ impl FloorPlanner for V1 {
                 .without_witnesses()
                 .synthesize(config.clone(), V1Pass::<_, CS>::measure(pass))?;
         }
+        println!("first pass synthesize: {:?}", timer.elapsed());
 
+        let timer = Instant::now();
         // Planning:
         // - Position the regions.
         let (regions, column_allocations) = strategy::slot_in_biggest_advice_first(measure.regions);
@@ -86,7 +88,9 @@ impl FloorPlanner for V1 {
             .map(|a| a.unbounded_interval_start())
             .max()
             .unwrap_or(0);
+        println!("first pass measure: {:?}", timer.elapsed());
 
+        let timer = Instant::now();
         // - Position the constants within those rows.
         let fixed_allocations: Vec<_> = constants
             .into_iter()
@@ -107,7 +111,7 @@ impl FloorPlanner for V1 {
                     .flat_map(move |e| e.range().unwrap().map(move |i| (c, i)))
             })
         };
-        println!("first pass: {:?}", timer.elapsed());
+        println!("first pass column allocation: {:?}", timer.elapsed());
 
         let timer = Instant::now();
         // Second pass:
@@ -117,7 +121,9 @@ impl FloorPlanner for V1 {
             let pass = &mut assign;
             circuit.synthesize(config, V1Pass::assign(pass))?;
         }
+        println!("second pass synthesize: {:?}", timer.elapsed());
 
+        let timer = Instant::now();
         // - Assign the constants.
         if constant_positions().count() < plan.constants.len() {
             return Err(Error::NotEnoughColumnsForConstants);
@@ -138,7 +144,7 @@ impl FloorPlanner for V1 {
                 *plan.regions[*advice.region_index] + advice.row_offset,
             )?;
         }
-        println!("second pass: {:?}", timer.elapsed());
+        println!("second pass assign constants: {:?}", timer.elapsed());
         Ok(())
     }
 }
