@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, time::Instant};
 
 use ff::Field;
 
@@ -65,6 +65,7 @@ impl FloorPlanner for V1 {
     ) -> Result<(), Error> {
         let mut plan = V1Plan::new(cs)?;
 
+        let timer = Instant::now();
         // First pass: measure the regions within the circuit.
         let mut measure = MeasurementPass::new();
         {
@@ -106,7 +107,9 @@ impl FloorPlanner for V1 {
                     .flat_map(move |e| e.range().unwrap().map(move |i| (c, i)))
             })
         };
+        println!("first pass: {:?}", timer.elapsed());
 
+        let timer = Instant::now();
         // Second pass:
         // - Assign the regions.
         let mut assign = AssignmentPass::new(&mut plan);
@@ -135,7 +138,7 @@ impl FloorPlanner for V1 {
                 *plan.regions[*advice.region_index] + advice.row_offset,
             )?;
         }
-
+        println!("second pass: {:?}", timer.elapsed());
         Ok(())
     }
 }
