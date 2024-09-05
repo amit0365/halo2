@@ -50,7 +50,7 @@ pub struct Allocations(BTreeSet<AllocatedRegion>);
 
 impl Allocations {
     /// Returns the row that forms the unbounded unallocated interval [row, None).
-    pub fn unbounded_interval_start(&self) -> usize {
+    pub(crate) fn unbounded_interval_start(&self) -> usize {
         self.0
             .iter()
             .last()
