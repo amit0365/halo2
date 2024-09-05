@@ -32,13 +32,13 @@ mod strategy;
 pub struct Folding;
 
 pub struct FoldingPlan<'a, F: Field, CS: Assignment<F> + 'a> {
-    cs: &'a mut CS,
+    pub cs: &'a mut CS,
     /// Stores the starting row for each region.
-    regions: Vec<RegionStart>,
+    pub regions: Vec<RegionStart>,
     /// Stores the constants to be assigned, and the cells to which they are copied.
-    constants: Vec<(Assigned<F>, Cell)>,
+    pub constants: Vec<(Assigned<F>, Cell)>,
     /// Stores the table fixed columns.
-    table_columns: Vec<TableColumn>,
+    pub table_columns: Vec<TableColumn>,
 }
 
 impl<'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug for FoldingPlan<'a, F, CS> {
@@ -247,7 +247,7 @@ impl<'p, 'a, F: Field, CS: Assignment<F> + SyncDeps> Layouter<F> for FoldingPass
 /// Measures the circuit.
 #[derive(Debug)]
 pub struct MeasurementPass {
-    regions: Vec<RegionShape>,
+    pub regions: Vec<RegionShape>,
 }
 
 impl MeasurementPass {
