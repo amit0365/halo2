@@ -281,6 +281,7 @@ impl<G: PrimeGroup, ConcreteCircuit: Circuit<G::Scalar>> CircuitCost<G, Concrete
             circuit,
             config,
             cs.constants.clone(),
+            None,
         )
         .unwrap();
         let (cs, _) = cs.compress_selectors(layout.selectors);

@@ -104,6 +104,7 @@ impl CircuitLayout {
             circuit,
             config,
             cs.constants.clone(),
+            None,
         )
         .unwrap();
         let (cs, selector_polys) = cs.compress_selectors(layout.selectors);

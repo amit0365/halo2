@@ -335,6 +335,7 @@ where
                     circuit,
                     config.clone(),
                     meta.constants.clone(),
+                    None,
                 )?;
 
                 let mut advice_values = batch_invert_assigned::<Scheme::Scalar>(

@@ -730,6 +730,7 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
                 circuit,
                 config.clone(),
                 constants.clone(),
+                None,
             )?;
         }
 

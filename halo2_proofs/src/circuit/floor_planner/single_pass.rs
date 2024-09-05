@@ -17,6 +17,8 @@ use crate::{
     },
 };
 
+use super::FloorPlannerData;
+
 /// A simple [`FloorPlanner`] that performs minimal optimizations.
 ///
 /// This floor planner is suitable for debugging circuits. It aims to reflect the circuit
@@ -31,6 +33,7 @@ impl FloorPlanner for SimpleFloorPlanner {
         circuit: &C,
         config: C::Config,
         constants: Vec<Column<Fixed>>,
+        data: Option<FloorPlannerData>,
     ) -> Result<(), Error> {
         let layouter = SingleChipLayouter::new(cs, constants)?;
         circuit.synthesize(config, layouter)

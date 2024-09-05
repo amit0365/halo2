@@ -5,8 +5,7 @@ use tracing::{debug, debug_span, span::EnteredSpan};
 
 use crate::{
     circuit::{
-        layouter::{RegionLayouter, SyncDeps},
-        AssignedCell, Cell, Layouter, Region, Table, Value,
+        floor_planner::FloorPlannerData, layouter::{RegionLayouter, SyncDeps}, AssignedCell, Cell, Layouter, Region, Table, Value
     },
     plonk::{
         Advice, Any, Assigned, Assignment, Challenge, Circuit, Column, ConstraintSystem, Error,
@@ -91,12 +90,14 @@ impl<P: FloorPlanner> FloorPlanner for TracingFloorPlanner<P> {
         circuit: &C,
         config: C::Config,
         constants: Vec<Column<Fixed>>,
+        data: Option<FloorPlannerData>,
     ) -> Result<(), Error> {
         P::synthesize(
             &mut TracingAssignment::new(cs),
             &TracingCircuit::borrowed(circuit),
             config,
             constants,
+            data,
         )
     }
 }

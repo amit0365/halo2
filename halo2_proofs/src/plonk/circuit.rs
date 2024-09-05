@@ -1,4 +1,5 @@
 use super::{lookup, permutation, shuffle, Assigned, Error};
+use crate::circuit::floor_planner::FloorPlannerData;
 use crate::circuit::layouter::SyncDeps;
 use crate::dev::metadata;
 use crate::{
@@ -745,6 +746,7 @@ pub trait FloorPlanner {
         circuit: &C,
         config: C::Config,
         constants: Vec<Column<Fixed>>,
+        data: Option<FloorPlannerData>,
     ) -> Result<(), Error>;
 }
 

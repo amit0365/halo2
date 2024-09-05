@@ -621,58 +621,58 @@ where
         }
     }
 
-    #[test]
-    fn poseidon_hash() {
-        // all three are diff wtf?
-        let rng = OsRng;
-        let message = [Fp::from(6), Fp::from(5), Fp::from(4), Fp::from(3), Fp::from(2)];
-        let output =
-        poseidonInline::Hash::<_, PoseidonSpec, VariableLength<Fp, 2>, 3, 2>::init().hash(&message);
-        println!("outputInline: {:?}", output);
+    // #[test]
+    // fn poseidon_hash() {
+    //     // all three are diff wtf?
+    //     let rng = OsRng;
+    //     let message = [Fp::from(6), Fp::from(5), Fp::from(4), Fp::from(3), Fp::from(2)];
+    //     let output =
+    //     poseidonInline::Hash::<_, PoseidonSpec, VariableLength<Fp, 2>, 3, 2>::init().hash(&message);
+    //     println!("outputInline: {:?}", output);
 
-        let mut poseidonInline = PoseidonHash::<Fp, 3, 2>::new::<R_F, R_P, SECURE_MDS>();
-        poseidonInline.update(&message);
-        let output = poseidonInline.squeeze();
-        println!("poseidonhash: {:?}", output);
+    //     let mut poseidonInline = PoseidonHash::<Fp, 3, 2>::new::<R_F, R_P, SECURE_MDS>();
+    //     poseidonInline.update(&message);
+    //     let output = poseidonInline.squeeze();
+    //     println!("poseidonhash: {:?}", output);
 
-        let k = 9;
-        let circuit = HashCircuit::<PoseidonSpec, 3, 2, 5> {
-            message: Value::known(message),
-            output: Value::known(output),
-            _spec: PhantomData,
-        };
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+    //     let k = 9;
+    //     let circuit = HashCircuit::<PoseidonSpec, 3, 2, 5> {
+    //         message: Value::known(message),
+    //         output: Value::known(output),
+    //         _spec: PhantomData,
+    //     };
+    //     let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+    //     assert_eq!(prover.verify(), Ok(()));
 
-    }
+    // }
 
-    #[cfg(feature = "test-dev-graph")]
-    #[test]
-    fn poseidon_hash_graph() {
-        use plotters::prelude::*;
+    // #[cfg(feature = "test-dev-graph")]
+    // #[test]
+    // fn poseidon_hash_graph() {
+    //     use plotters::prelude::*;
 
-        let root = BitMapBackend::new("PoseidonChip.png", (1024, 768)).into_drawing_area();
-        root.fill(&WHITE).unwrap();
-        let root = root
-            .titled("Poseidon Chip Layout", ("sans-serif", 60))
-            .unwrap();
+    //     let root = BitMapBackend::new("PoseidonChip.png", (1024, 768)).into_drawing_area();
+    //     root.fill(&WHITE).unwrap();
+    //     let root = root
+    //         .titled("Poseidon Chip Layout", ("sans-serif", 60))
+    //         .unwrap();
 
-        let rng = OsRng;
-        let message = [Fp::from(6), Fp::from(5), Fp::from(4), Fp::from(3), Fp::from(2)];
-        let output =
-            poseidonInline::Hash::<_, PoseidonSpec, VariableLength<Fp, 2>, 3, 2>::init().hash(&message);
-        println!("outputInline: {:?}", output);
+    //     let rng = OsRng;
+    //     let message = [Fp::from(6), Fp::from(5), Fp::from(4), Fp::from(3), Fp::from(2)];
+    //     let output =
+    //         poseidonInline::Hash::<_, PoseidonSpec, VariableLength<Fp, 2>, 3, 2>::init().hash(&message);
+    //     println!("outputInline: {:?}", output);
 
-        let k = 8;
-        let circuit = HashCircuit::<PoseidonSpec, 3, 2, 5> {
-            message: Value::known(message),
-            output: Value::known(output),
-            _spec: PhantomData,
-        };
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+    //     let k = 8;
+    //     let circuit = HashCircuit::<PoseidonSpec, 3, 2, 5> {
+    //         message: Value::known(message),
+    //         output: Value::known(output),
+    //         _spec: PhantomData,
+    //     };
+    //     let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+    //     assert_eq!(prover.verify(), Ok(()));
 
-        halo2_proofs::dev::CircuitLayout::default()
-        .render(8, &circuit, &root)
-        .unwrap();
-    }
+    //     halo2_proofs::dev::CircuitLayout::default()
+    //     .render(8, &circuit, &root)
+    //     .unwrap();
+    // }

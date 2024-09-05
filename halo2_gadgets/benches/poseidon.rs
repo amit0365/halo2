@@ -142,8 +142,9 @@ impl<const WIDTH: usize, const RATE: usize> Spec<Fp, WIDTH, RATE> for MySpec<WID
         0
     }
 
-    fn constants() -> (Vec<[Fp; WIDTH]>, Mds<Fp, WIDTH>, Mds<Fp, WIDTH>) {
-        generate_constants::<_, Self, WIDTH, RATE>()
+    fn constants() -> (Vec<[Fp; WIDTH]>, Mds<Fp, WIDTH>, Mds<Fp, WIDTH>, [Fp; WIDTH]) {
+        let (rc, mds, mds_inv, mds_inv_0) = generate_constants::<_, Self, WIDTH, RATE>();
+        (rc, mds, mds_inv, mds_inv[0])
     }
 }
 

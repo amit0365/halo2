@@ -238,6 +238,7 @@ where
         circuit,
         config,
         cs.constants.clone(),
+        None,
     )?;
 
     let mut fixed = batch_invert_assigned(assembly.fixed);
@@ -304,6 +305,7 @@ where
         circuit,
         config,
         cs.constants.clone(),
+        None,
     )?;
 
     let mut fixed = batch_invert_assigned(assembly.fixed);

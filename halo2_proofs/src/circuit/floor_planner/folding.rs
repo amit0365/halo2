@@ -1,6 +1,7 @@
-use std::{fmt, time::Instant};
+use std::{collections::HashMap, fmt, time::Instant};
 
 use ff::Field;
+use strategy::Allocations;
 
 use crate::{
     circuit::{
@@ -16,6 +17,7 @@ use crate::{
 
 use super::FloorPlannerData;
 
+pub 
 mod strategy;
 
 /// The version 1 [`FloorPlanner`] provided by `halo2`.
@@ -27,9 +29,9 @@ mod strategy;
 /// - Regions are laid out using a greedy first-fit strategy, after sorting regions by
 ///   their "advice area" (number of advice columns * rows).
 #[derive(Debug)]
-pub struct V1;
+pub struct Folding;
 
-struct V1Plan<'a, F: Field, CS: Assignment<F> + 'a> {
+struct FoldingPlan<'a, F: Field, CS: Assignment<F> + 'a> {
     cs: &'a mut CS,
     /// Stores the starting row for each region.
     regions: Vec<RegionStart>,
@@ -39,16 +41,16 @@ struct V1Plan<'a, F: Field, CS: Assignment<F> + 'a> {
     table_columns: Vec<TableColumn>,
 }
 
-impl<'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug for V1Plan<'a, F, CS> {
+impl<'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug for FoldingPlan<'a, F, CS> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("floor_planner::V1Plan").finish()
+        f.debug_struct("floor_planner::FoldingPlan").finish()
     }
 }
 
-impl<'a, F: Field, CS: Assignment<F> + SyncDeps> V1Plan<'a, F, CS> {
+impl<'a, F: Field, CS: Assignment<F> + SyncDeps> FoldingPlan<'a, F, CS> {
     /// Creates a new v1 layouter.
     pub fn new(cs: &'a mut CS) -> Result<Self, Error> {
-        let ret = V1Plan {
+        let ret = FoldingPlan {
             cs,
             regions: vec![],
             constants: vec![],
@@ -58,7 +60,7 @@ impl<'a, F: Field, CS: Assignment<F> + SyncDeps> V1Plan<'a, F, CS> {
     }
 }
 
-impl FloorPlanner for V1 {
+impl FloorPlanner for Folding {
     fn synthesize<F: Field, CS: Assignment<F> + SyncDeps, C: Circuit<F>>(
         cs: &mut CS,
         circuit: &C,
@@ -66,32 +68,35 @@ impl FloorPlanner for V1 {
         constants: Vec<Column<Fixed>>,
         data: Option<FloorPlannerData>,
     ) -> Result<(), Error> {
-        let mut plan = V1Plan::new(cs)?;
+        let mut plan = FoldingPlan::new(cs)?;
 
-        let timer = Instant::now();
-        // First pass: measure the regions within the circuit.
-        let mut measure = MeasurementPass::new();
-        {
-            let pass = &mut measure;
-            circuit
-                .without_witnesses()
-                .synthesize(config.clone(), V1Pass::<_, CS>::measure(pass))?;
-        }
-        println!("first pass synthesize: {:?}", timer.elapsed());
+        // let timer = Instant::now();
+        // // First pass: measure the regions within the circuit.
+        // let mut measure = MeasurementPass::new();
+        // {
+        //     let pass = &mut measure;
+        //     circuit
+        //         .without_witnesses()
+        //         .synthesize(config.clone(), FoldingPass::<_, CS>::measure(pass))?;
+        // }
+        // println!("first pass synthesize: {:?}", timer.elapsed());
 
-        let timer = Instant::now();
-        // Planning:
-        // - Position the regions.
-        let (regions, column_allocations) = strategy::slot_in_biggest_advice_first(measure.regions);
-        plan.regions = regions;
+        // let timer = Instant::now();
+        // // Planning:
+        // // - Position the regions.
+        // let (regions, column_allocations) = strategy::slot_in_biggest_advice_first(measure.regions);
+        // plan.regions = regions;
 
         // - Determine how many rows our planned circuit will require.
-        let first_unassigned_row = column_allocations
-            .values()
-            .map(|a| a.unbounded_interval_start())
-            .max()
-            .unwrap_or(0);
-        println!("first pass measure: {:?}", timer.elapsed());
+        // let first_unassigned_row = column_allocations
+        // .values()
+        // .map(|a| a.unbounded_interval_start())
+        // .max()
+        // .unwrap_or(0);
+        // println!("first pass measure: {:?}", timer.elapsed());
+
+        let FloorPlannerData { column_allocations, regions, first_unassigned_row } = data.unwrap();
+        plan.regions = regions;
 
         let timer = Instant::now();
         // - Position the constants within those rows.
@@ -122,7 +127,7 @@ impl FloorPlanner for V1 {
         let mut assign = AssignmentPass::new(&mut plan);
         {
             let pass = &mut assign;
-            circuit.synthesize(config, V1Pass::assign(pass))?;
+            circuit.synthesize(config, FoldingPass::assign(pass))?;
         }
         println!("second pass synthesize: {:?}", timer.elapsed());
 
@@ -160,19 +165,19 @@ enum Pass<'p, 'a, F: Field, CS: Assignment<F> + 'a> {
 
 /// A single pass of the [`V1`] layouter.
 #[derive(Debug)]
-pub struct V1Pass<'p, 'a, F: Field, CS: Assignment<F> + 'a>(Pass<'p, 'a, F, CS>);
+pub struct FoldingPass<'p, 'a, F: Field, CS: Assignment<F> + 'a>(Pass<'p, 'a, F, CS>);
 
-impl<'p, 'a, F: Field, CS: Assignment<F> + 'a> V1Pass<'p, 'a, F, CS> {
+impl<'p, 'a, F: Field, CS: Assignment<F> + 'a> FoldingPass<'p, 'a, F, CS> {
     fn measure(pass: &'p mut MeasurementPass) -> Self {
-        V1Pass(Pass::Measurement(pass))
+        FoldingPass(Pass::Measurement(pass))
     }
 
     fn assign(pass: &'p mut AssignmentPass<'p, 'a, F, CS>) -> Self {
-        V1Pass(Pass::Assignment(pass))
+        FoldingPass(Pass::Assignment(pass))
     }
 }
 
-impl<'p, 'a, F: Field, CS: Assignment<F> + SyncDeps> Layouter<F> for V1Pass<'p, 'a, F, CS> {
+impl<'p, 'a, F: Field, CS: Assignment<F> + SyncDeps> Layouter<F> for FoldingPass<'p, 'a, F, CS> {
     type Root = Self;
 
     fn assign_region<A, AR, N, NR>(&mut self, name: N, assignment: A) -> Result<AR, Error>
@@ -271,13 +276,13 @@ impl MeasurementPass {
 /// Assigns the circuit.
 #[derive(Debug)]
 pub struct AssignmentPass<'p, 'a, F: Field, CS: Assignment<F> + 'a> {
-    plan: &'p mut V1Plan<'a, F, CS>,
+    plan: &'p mut FoldingPlan<'a, F, CS>,
     /// Counter tracking which region we need to assign next.
     region_index: usize,
 }
 
 impl<'p, 'a, F: Field, CS: Assignment<F> + SyncDeps> AssignmentPass<'p, 'a, F, CS> {
-    fn new(plan: &'p mut V1Plan<'a, F, CS>) -> Self {
+    fn new(plan: &'p mut FoldingPlan<'a, F, CS>) -> Self {
         AssignmentPass {
             plan,
             region_index: 0,
@@ -295,7 +300,7 @@ impl<'p, 'a, F: Field, CS: Assignment<F> + SyncDeps> AssignmentPass<'p, 'a, F, C
         self.region_index += 1;
 
         self.plan.cs.enter_region(name);
-        let mut region = V1Region::new(self.plan, region_index.into());
+        let mut region = FoldingRegion::new(self.plan, region_index.into());
         let result = {
             let region: &mut dyn RegionLayouter<F> = &mut region;
             assignment(region.into())
@@ -359,27 +364,27 @@ impl<'p, 'a, F: Field, CS: Assignment<F> + SyncDeps> AssignmentPass<'p, 'a, F, C
     }
 }
 
-struct V1Region<'r, 'a, F: Field, CS: Assignment<F> + 'a> {
-    plan: &'r mut V1Plan<'a, F, CS>,
+struct FoldingRegion<'r, 'a, F: Field, CS: Assignment<F> + 'a> {
+    plan: &'r mut FoldingPlan<'a, F, CS>,
     region_index: RegionIndex,
 }
 
-impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug for V1Region<'r, 'a, F, CS> {
+impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug for FoldingRegion<'r, 'a, F, CS> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("V1Region")
+        f.debug_struct("FoldingRegion")
             .field("plan", &self.plan)
             .field("region_index", &self.region_index)
             .finish()
     }
 }
 
-impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> V1Region<'r, 'a, F, CS> {
-    fn new(plan: &'r mut V1Plan<'a, F, CS>, region_index: RegionIndex) -> Self {
-        V1Region { plan, region_index }
+impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> FoldingRegion<'r, 'a, F, CS> {
+    fn new(plan: &'r mut FoldingPlan<'a, F, CS>, region_index: RegionIndex) -> Self {
+        FoldingRegion { plan, region_index }
     }
 }
 
-impl<'r, 'a, F: Field, CS: Assignment<F> + SyncDeps> RegionLayouter<F> for V1Region<'r, 'a, F, CS> {
+impl<'r, 'a, F: Field, CS: Assignment<F> + SyncDeps> RegionLayouter<F> for FoldingRegion<'r, 'a, F, CS> {
     fn enable_selector<'v>(
         &'v mut self,
         annotation: &'v (dyn Fn() -> String + 'v),
@@ -519,7 +524,7 @@ mod tests {
 
         impl Circuit<vesta::Scalar> for MyCircuit {
             type Config = Column<Advice>;
-            type FloorPlanner = super::V1;
+            type FloorPlanner = super::Folding;
             #[cfg(feature = "circuit-params")]
             type Params = ();
 
