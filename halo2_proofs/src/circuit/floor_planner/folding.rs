@@ -245,7 +245,7 @@ impl<'p, 'a, F: Field, CS: Assignment<F> + SyncDeps> Layouter<F> for FoldingPass
 }
 
 /// Measures the circuit.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MeasurementPass {
     pub regions: Vec<RegionShape>,
 }
