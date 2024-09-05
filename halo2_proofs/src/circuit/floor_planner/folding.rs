@@ -168,11 +168,11 @@ enum Pass<'p, 'a, F: Field, CS: Assignment<F> + 'a> {
 pub struct FoldingPass<'p, 'a, F: Field, CS: Assignment<F> + 'a>(Pass<'p, 'a, F, CS>);
 
 impl<'p, 'a, F: Field, CS: Assignment<F> + 'a> FoldingPass<'p, 'a, F, CS> {
-    fn measure(pass: &'p mut MeasurementPass) -> Self {
+    pub fn measure(pass: &'p mut MeasurementPass) -> Self {
         FoldingPass(Pass::Measurement(pass))
     }
 
-    fn assign(pass: &'p mut AssignmentPass<'p, 'a, F, CS>) -> Self {
+    pub fn assign(pass: &'p mut AssignmentPass<'p, 'a, F, CS>) -> Self {
         FoldingPass(Pass::Assignment(pass))
     }
 }
@@ -251,7 +251,7 @@ pub struct MeasurementPass {
 }
 
 impl MeasurementPass {
-    fn new() -> Self {
+    pub fn new() -> Self {
         MeasurementPass { regions: vec![] }
     }
 

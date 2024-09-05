@@ -12,7 +12,7 @@ pub struct FloorPlannerData {
 }
 
 mod v1;
-mod folding;
+pub mod folding;
 
 pub use v1::{V1Pass, V1};
 pub use folding::{Folding, FoldingPass, FoldingPlan, MeasurementPass};
