@@ -31,7 +31,7 @@ mod strategy;
 #[derive(Debug)]
 pub struct Folding;
 
-struct FoldingPlan<'a, F: Field, CS: Assignment<F> + 'a> {
+pub struct FoldingPlan<'a, F: Field, CS: Assignment<F> + 'a> {
     cs: &'a mut CS,
     /// Stores the starting row for each region.
     regions: Vec<RegionStart>,

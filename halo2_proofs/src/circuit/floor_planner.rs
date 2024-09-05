@@ -15,6 +15,6 @@ mod v1;
 mod folding;
 
 pub use v1::{V1Pass, V1};
-pub use folding::{Folding, FoldingPass};
+pub use folding::{Folding, FoldingPass, FoldingPlan, MeasurementPass};
 
 use super::{layouter::RegionColumn, RegionStart};
