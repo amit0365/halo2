@@ -1,4 +1,4 @@
-use super::circuit::Expression;
+use super::{circuit::Expression, Selector};
 use ff::Field;
 use std::fmt::{self, Debug};
 
@@ -10,6 +10,7 @@ pub struct Argument<F: Field> {
     pub(crate) name: String,
     pub(crate) input_expressions: Vec<Expression<F>>,
     pub(crate) table_expressions: Vec<Expression<F>>,
+    pub(crate) queried_selectors: Vec<Selector>,
 }
 
 impl<F: Field> Debug for Argument<F> {
@@ -17,6 +18,7 @@ impl<F: Field> Debug for Argument<F> {
         f.debug_struct("Argument")
             .field("input_expressions", &self.input_expressions)
             .field("table_expressions", &self.table_expressions)
+            .field("queried_selectors", &self.queried_selectors)
             .finish()
     }
 }
@@ -25,12 +27,13 @@ impl<F: Field> Argument<F> {
     /// Constructs a new lookup argument.
     ///
     /// `table_map` is a sequence of `(input, table)` tuples.
-    pub fn new<S: AsRef<str>>(name: S, table_map: Vec<(Expression<F>, Expression<F>)>) -> Self {
+    pub fn new<S: AsRef<str>>(name: S, table_map: Vec<(Expression<F>, Expression<F>)>, queried_selectors: Vec<Selector>) -> Self {
         let (input_expressions, table_expressions) = table_map.into_iter().unzip();
         Argument {
             name: name.as_ref().to_string(),
             input_expressions,
             table_expressions,
+            queried_selectors,
         }
     }
 
@@ -90,6 +93,11 @@ impl<F: Field> Argument<F> {
     /// Returns table of this argument
     pub fn table_expressions(&self) -> &Vec<Expression<F>> {
         &self.table_expressions
+    }
+
+    /// Returns queried selectors of this argument
+    pub fn queried_selectors(&self) -> &Vec<Selector> {
+        &self.queried_selectors
     }
 
     /// Returns name of this argument

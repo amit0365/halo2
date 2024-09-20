@@ -311,7 +311,7 @@ pub struct MockProver<F: Field> {
     permutation: permutation::keygen::Assembly,
 
     // A range of available rows for assignment and copies.
-    usable_rows: Range<usize>,
+    pub usable_rows: Range<usize>,
 
     current_phase: sealed::Phase,
 

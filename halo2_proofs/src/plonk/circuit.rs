@@ -1736,10 +1736,11 @@ impl<F: Field> ConstraintSystem<F> {
                 (input, table)
             })
             .collect();
+        let queried_selectors = cells.queried_selectors;
         let index = self.lookups.len();
 
         self.lookups
-            .push(lookup::Argument::new(name.as_ref(), table_map));
+            .push(lookup::Argument::new(name.as_ref(), table_map, queried_selectors));
 
         index
     }
@@ -1762,10 +1763,11 @@ impl<F: Field> ConstraintSystem<F> {
                 (input, table)
             })
             .collect();
+        let queried_selectors = cells.queried_selectors;
         let index = self.lookups.len();
 
         self.lookups
-            .push(lookup::Argument::new(name.as_ref(), table_map));
+            .push(lookup::Argument::new(name.as_ref(), table_map, queried_selectors));
 
         index
     }
