@@ -589,7 +589,7 @@ impl TableColumn {
 /// A challenge squeezed from transcript after advice columns at the phase have been committed.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct AccU {
-    pub(crate) index: usize,
+    pub index: usize,
 }
 
 /// A challenge squeezed from transcript after advice columns at the phase have been committed.
