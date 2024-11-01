@@ -293,6 +293,7 @@ where
                         .chain(vk.cs.gates.iter().flat_map(move |gate| {
                             gate.polynomials().iter().map(move |poly| {
                                 poly.evaluate(
+                                    &|_| Scheme::Scalar::ONE,
                                     &|scalar| scalar,
                                     &|_| {
                                         panic!("virtual selectors are removed during optimization")

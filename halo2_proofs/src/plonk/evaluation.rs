@@ -671,7 +671,10 @@ impl<C: CurveAffine> GraphEvaluator<C> {
 
     /// Generates an optimized evaluation for the expression
     fn add_expression(&mut self, expr: &Expression<C::ScalarExt>) -> ValueSource {
-        match expr {
+        match expr {//todo placeholder this fn not called while folding
+            Expression::AccU(acc_u) => self.add_calculation(Calculation::Store(
+                ValueSource::Challenge(acc_u.index),
+            )),
             Expression::Constant(scalar) => self.add_constant(scalar),
             Expression::Selector(_selector) => unreachable!(),
             Expression::Fixed(query) => {
@@ -845,6 +848,7 @@ pub fn evaluate<F: Field, B: Basis>(
         for (i, value) in values.iter_mut().enumerate() {
             let idx = start + i;
             *value = expression.evaluate(
+                &|_| F::ONE,
                 &|scalar| scalar,
                 &|_| panic!("virtual selectors are removed during optimization"),
                 &|query| {

@@ -141,6 +141,7 @@ pub(super) fn cell_values<'a, F: Field>(
     let virtual_cells = gate.queried_cells();
     let cell_values = poly.evaluate(
         &|_| BTreeMap::default(),
+        &|_| BTreeMap::default(),
         &|_| panic!("virtual selectors are removed during optimization"),
         &cell_value(virtual_cells, load_fixed),
         &cell_value(virtual_cells, load_advice),

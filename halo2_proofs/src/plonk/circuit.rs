@@ -588,6 +588,12 @@ impl TableColumn {
 
 /// A challenge squeezed from transcript after advice columns at the phase have been committed.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct AccU {
+    pub(crate) index: usize,
+}
+
+/// A challenge squeezed from transcript after advice columns at the phase have been committed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Challenge {
     index: usize,
     pub(crate) phase: sealed::Phase,
@@ -799,6 +805,8 @@ pub trait Circuit<F: Field> {
 /// Low-degree expression representing an identity that must hold over the committed columns.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Expression<F> {
+    /// This is the homogenizing factor u
+    AccU(AccU),
     /// This is a constant polynomial
     Constant(F),
     /// This is a virtual selector
@@ -825,6 +833,7 @@ impl<F: Field> Expression<F> {
     /// Make side effects
     pub fn query_cells(&mut self, cells: &mut VirtualCells<'_, F>) {
         match self {
+            Expression::AccU(_) => (),
             Expression::Constant(_) => (),
             Expression::Selector(selector) => {
                 if !cells.queried_selectors.contains(selector) {
@@ -880,6 +889,7 @@ impl<F: Field> Expression<F> {
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate<T>(
         &self,
+        acc_u: &impl Fn(AccU) -> T,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(Selector) -> T,
         fixed_column: &impl Fn(FixedQuery) -> T,
@@ -892,6 +902,7 @@ impl<F: Field> Expression<F> {
         scaled: &impl Fn(T, F) -> T,
     ) -> T {
         match self {
+            Expression::AccU(u) => acc_u(*u),
             Expression::Constant(scalar) => constant(*scalar),
             Expression::Selector(selector) => selector_column(*selector),
             Expression::Fixed(query) => fixed_column(*query),
@@ -900,6 +911,7 @@ impl<F: Field> Expression<F> {
             Expression::Challenge(value) => challenge(*value),
             Expression::Negated(a) => {
                 let a = a.evaluate(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -915,6 +927,7 @@ impl<F: Field> Expression<F> {
             }
             Expression::Sum(a, b) => {
                 let a = a.evaluate(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -927,6 +940,7 @@ impl<F: Field> Expression<F> {
                     scaled,
                 );
                 let b = b.evaluate(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -942,6 +956,7 @@ impl<F: Field> Expression<F> {
             }
             Expression::Product(a, b) => {
                 let a = a.evaluate(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -954,6 +969,7 @@ impl<F: Field> Expression<F> {
                     scaled,
                 );
                 let b = b.evaluate(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -969,6 +985,7 @@ impl<F: Field> Expression<F> {
             }
             Expression::Scaled(a, f) => {
                 let a = a.evaluate(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -990,6 +1007,7 @@ impl<F: Field> Expression<F> {
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate_lazy<T: PartialEq>(
         &self,
+        acc_u: &impl Fn(AccU) -> T,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(Selector) -> T,
         fixed_column: &impl Fn(FixedQuery) -> T,
@@ -1003,6 +1021,7 @@ impl<F: Field> Expression<F> {
         zero: &T,
     ) -> T {
         match self {
+            Expression::AccU(u) => acc_u(*u),
             Expression::Constant(scalar) => constant(*scalar),
             Expression::Selector(selector) => selector_column(*selector),
             Expression::Fixed(query) => fixed_column(*query),
@@ -1011,6 +1030,7 @@ impl<F: Field> Expression<F> {
             Expression::Challenge(value) => challenge(*value),
             Expression::Negated(a) => {
                 let a = a.evaluate_lazy(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -1027,6 +1047,7 @@ impl<F: Field> Expression<F> {
             }
             Expression::Sum(a, b) => {
                 let a = a.evaluate_lazy(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -1040,6 +1061,7 @@ impl<F: Field> Expression<F> {
                     zero,
                 );
                 let b = b.evaluate_lazy(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -1061,6 +1083,7 @@ impl<F: Field> Expression<F> {
                     (b, a)
                 };
                 let a = a.evaluate_lazy(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -1078,6 +1101,7 @@ impl<F: Field> Expression<F> {
                     a
                 } else {
                     let b = b.evaluate_lazy(
+                        acc_u,
                         constant,
                         selector_column,
                         fixed_column,
@@ -1095,6 +1119,7 @@ impl<F: Field> Expression<F> {
             }
             Expression::Scaled(a, f) => {
                 let a = a.evaluate_lazy(
+                    acc_u,
                     constant,
                     selector_column,
                     fixed_column,
@@ -1114,6 +1139,7 @@ impl<F: Field> Expression<F> {
 
     fn write_identifier<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         match self {
+            Expression::AccU(acc_u) => write!(writer, "{:?}", acc_u),
             Expression::Constant(scalar) => write!(writer, "{:?}", scalar),
             Expression::Selector(selector) => write!(writer, "selector[{}]", selector.0),
             Expression::Fixed(query) => {
@@ -1178,6 +1204,7 @@ impl<F: Field> Expression<F> {
     /// Compute the degree of this polynomial
     pub fn degree(&self) -> usize {
         match self {
+            Expression::AccU(_) => 0,
             Expression::Constant(_) => 0,
             Expression::Selector(_) => 1,
             Expression::Fixed(_) => 1,
@@ -1194,6 +1221,7 @@ impl<F: Field> Expression<F> {
     /// Approximate the computational complexity of this expression.
     pub fn complexity(&self) -> usize {
         match self {
+            Expression::AccU(_) => 0,
             Expression::Constant(_) => 0,
             Expression::Selector(_) => 1,
             Expression::Fixed(_) => 1,
@@ -1215,6 +1243,7 @@ impl<F: Field> Expression<F> {
     /// Returns whether or not this expression contains a simple `Selector`.
     fn contains_simple_selector(&self) -> bool {
         self.evaluate(
+            &|_| false,
             &|_| false,
             &|selector| selector.is_simple(),
             &|_| false,
@@ -1238,6 +1267,7 @@ impl<F: Field> Expression<F> {
 
         self.evaluate(
             &|_| None,
+            &|_| None,
             &|selector| {
                 if selector.is_simple() {
                     Some(selector)
@@ -1260,6 +1290,7 @@ impl<F: Field> Expression<F> {
 impl<F: std::fmt::Debug> std::fmt::Debug for Expression<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Expression::AccU(acc_u) => f.debug_tuple("AccU").field(acc_u).finish(),
             Expression::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
             Expression::Selector(selector) => f.debug_tuple("Selector").field(selector).finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
@@ -2018,6 +2049,7 @@ impl<F: Field> ConstraintSystem<F> {
             must_be_nonsimple: bool,
         ) {
             *expr = expr.evaluate(
+                &|acc_u| Expression::AccU(acc_u),
                 &|constant| Expression::Constant(constant),
                 &|selector| {
                     if must_be_nonsimple {

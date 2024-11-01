@@ -68,6 +68,7 @@ impl FailureLocation {
             .flat_map(|expression| {
                 expression.evaluate(
                     &|_| vec![],
+                    &|_| vec![],
                     &|_| panic!("virtual selectors are removed during optimization"),
                     &|query| vec![cs.fixed_queries[query.index.unwrap()].0.into()],
                     &|query| vec![cs.advice_queries[query.index.unwrap()].0.into()],
@@ -526,6 +527,7 @@ fn render_lookup<F: Field>(
     // expressions for the table side of lookups.
     let lookup_columns = lookup.table_expressions.iter().map(|expr| {
         expr.evaluate(
+            &|acc_u| format!("C({})", acc_u.index),
             &|f| format! {"Const: {:#?}", f},
             &|s| format! {"S{}", s.0},
             &|query| {
@@ -608,6 +610,7 @@ fn render_lookup<F: Field>(
     for (i, input) in lookup.input_expressions.iter().enumerate() {
         // Fetch the cell values (since we don't store them in VerifyFailure::Lookup).
         let cell_values = input.evaluate(
+            &|_| BTreeMap::default(),
             &|_| BTreeMap::default(),
             &|_| panic!("virtual selectors are removed during optimization"),
             &cell_value(&util::load(n, row, &cs.fixed_queries, &prover.fixed)),
@@ -692,6 +695,7 @@ fn render_shuffle<F: Field>(
 
     let shuffle_columns = shuffle.shuffle_expressions.iter().map(|expr| {
         expr.evaluate(
+            &|acc_u| format!("C({})", acc_u.index),
             &|f| format! {"Const: {:#?}", f},
             &|s| format! {"S{}", s.0},
             &|query| {
@@ -773,6 +777,7 @@ fn render_shuffle<F: Field>(
     for (i, input) in shuffle.input_expressions.iter().enumerate() {
         // Fetch the cell values (since we don't store them in VerifyFailure::Shuffle).
         let cell_values = input.evaluate(
+            &|_| BTreeMap::default(),
             &|_| BTreeMap::default(),
             &|_| panic!("virtual selectors are removed during optimization"),
             &cell_value(&util::load(n, row, &cs.fixed_queries, &prover.fixed)),

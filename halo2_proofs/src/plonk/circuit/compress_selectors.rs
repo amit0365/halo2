@@ -316,6 +316,7 @@ mod tests {
                     .zip(combination_assignments[selector.combination_index].iter())
                 {
                     let eval = selector.expression.evaluate(
+                        &|_| panic!("should not occur in returned expressions"),
                         &|c| c,
                         &|_| panic!("should not occur in returned expressions"),
                         &|query| {

@@ -872,6 +872,7 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
                         let row = row as i32 + n;
                         gate.polynomials().iter().enumerate().filter_map(
                             move |(poly_index, poly)| match poly.evaluate_lazy(
+                                &|_| Value::Real(F::ONE),
                                 &|scalar| Value::Real(scalar),
                                 &|_| panic!("virtual selectors are removed during optimization"),
                                 &util::load(n, row, &self.cs.fixed_queries, &self.fixed),
@@ -931,6 +932,7 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
 
         let load = |expression: &Expression<F>, row| {
             expression.evaluate_lazy(
+                &|_| Value::Real(F::ONE),
                 &|scalar| Value::Real(scalar),
                 &|_| panic!("virtual selectors are removed during optimization"),
                 &|query| {
@@ -1331,6 +1333,7 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
                         .enumerate()
                         .filter_map(move |(poly_index, poly)| {
                             match poly.evaluate_lazy(
+                                &|_| Value::Real(F::ONE),
                                 &|scalar| Value::Real(scalar),
                                 &|_| panic!("virtual selectors are removed during optimization"),
                                 &util::load(n, row, &self.cs.fixed_queries, &self.fixed),
@@ -1392,6 +1395,7 @@ impl<F: FromUniformBytes<64> + Ord> MockProver<F> {
 
         let load = |expression: &Expression<F>, row| {
             expression.evaluate_lazy(
+                &|_| Value::Real(F::ONE),
                 &|scalar| Value::Real(scalar),
                 &|_| panic!("virtual selectors are removed during optimization"),
                 &|query| {

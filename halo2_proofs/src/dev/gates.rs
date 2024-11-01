@@ -127,6 +127,7 @@ impl CircuitGates {
                     .map(|(i, constraint)| Constraint {
                         name: gate.constraint_name(i).to_string(),
                         expression: constraint.evaluate(
+                            &|acc_u| format!("C({})", acc_u.index),
                             &util::format_value,
                             &|selector| format!("S{}", selector.0),
                             &|query| format!("F{}@{}", query.column_index, query.rotation.0),
@@ -173,6 +174,7 @@ impl CircuitGates {
                             },
                         ),
                         queries: constraint.evaluate(
+                            &|_| BTreeSet::default(),
                             &|_| BTreeSet::default(),
                             &|selector| vec![format!("S{}", selector.0)].into_iter().collect(),
                             &|query| {
@@ -225,6 +227,7 @@ impl CircuitGates {
             .flat_map(|gate| {
                 gate.polynomials().iter().map(|poly| {
                     poly.evaluate(
+                        &|_| (0, 0, 0),
                         &|_| (0, 0, 0),
                         &|_| (0, 0, 0),
                         &|_| (0, 0, 0),

@@ -143,6 +143,7 @@ pub(super) fn expression_to_string<F: Field>(
     layout: &BTreeMap<i32, BTreeMap<metadata::Column, String>>,
 ) -> String {
     expr.evaluate(
+        &|acc_u| format!("C({})", acc_u.index),
         &util::format_value,
         &|_| panic!("virtual selectors are removed during optimization"),
         &|query| {

@@ -75,6 +75,7 @@ impl<C: CurveAffine> Evaluated<C> {
                     .iter()
                     .map(|expression| {
                         expression.evaluate(
+                            &|_| C::Scalar::ONE,
                             &|scalar| scalar,
                             &|_| panic!("virtual selectors are removed during optimization"),
                             &|query| fixed_evals[query.index.unwrap()],
