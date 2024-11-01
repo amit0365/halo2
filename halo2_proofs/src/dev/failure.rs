@@ -527,7 +527,7 @@ fn render_lookup<F: Field>(
     // expressions for the table side of lookups.
     let lookup_columns = lookup.table_expressions.iter().map(|expr| {
         expr.evaluate(
-            &|acc_u| format!("C({})", acc_u.index),
+            &|acc_u| format!("AccU({})", acc_u.index),
             &|f| format! {"Const: {:#?}", f},
             &|s| format! {"S{}", s.0},
             &|query| {
@@ -695,7 +695,7 @@ fn render_shuffle<F: Field>(
 
     let shuffle_columns = shuffle.shuffle_expressions.iter().map(|expr| {
         expr.evaluate(
-            &|acc_u| format!("C({})", acc_u.index),
+            &|acc_u| format!("AccU({})", acc_u.index),
             &|f| format! {"Const: {:#?}", f},
             &|s| format! {"S{}", s.0},
             &|query| {
