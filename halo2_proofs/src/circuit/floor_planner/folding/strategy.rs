@@ -352,13 +352,17 @@ fn slot_in(
 fn slot_in_par(
     region_shapes: Vec<RegionShape>,
 ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
+    let timer = Instant::now();
     let column_allocations = Arc::new(Mutex::new(CircuitAllocations::default()));
     let regions = region_shapes
         .into_par_iter()
         .map(|region| {
+            let timer = Instant::now();
             let mut region_columns: Vec<_> = region.columns().into_par_iter().cloned().collect();
             region_columns.sort_unstable();
+            println!("sort_unstable done: {:?}", timer.elapsed());
 
+            let timer = Instant::now();
             let region_start = first_fit_region_par(
                 &mut column_allocations.lock().unwrap(),
                 &region_columns,
@@ -367,11 +371,11 @@ fn slot_in_par(
                 None,
             )
             .expect("We can always fit a region somewhere");
-            
+            println!("first_fit_region_par done: {:?}", timer.elapsed());
             (region_start.into(), region)
         })
         .collect();
-
+    println!("collect done: {:?}", timer.elapsed());
     // Extract final allocations
     let final_allocations = Arc::try_unwrap(column_allocations)
         .expect("Arc should have no other references at this point")
