@@ -319,15 +319,14 @@ use std::sync::Arc;
 fn slot_in(
     region_shapes: Vec<RegionShape>,
 ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
-    //let column_allocations = Arc::new(Mutex::new(CircuitAllocations::default()));
     let mut column_allocations = CircuitAllocations::default();
     let regions = region_shapes
         .into_iter()
         .map(|region| {
-            let mut region_columns: Vec<_> = region.columns().into_par_iter().cloned().collect();
+            let mut region_columns: Vec<_> = region.columns().iter().cloned().collect();
             region_columns.sort_unstable();
 
-            let region_start = first_fit_region_par(
+            let region_start = first_fit_region(
                 &mut column_allocations,
                 &region_columns,
                 region.row_count(),
@@ -339,12 +338,6 @@ fn slot_in(
             (region_start.into(), region)
         })
         .collect();
-
-    // Extract final allocations
-    // let final_allocations = Arc::try_unwrap(column_allocations)
-    //     .unwrap()
-    //     .into_inner()
-    //     .unwrap();
 
     (regions, column_allocations)
 }
@@ -510,7 +503,7 @@ pub fn slot_in_biggest_advice_first(
     sorted_regions.reverse();
 
     // Lay out the sorted regions.
-    let (mut regions, column_allocations) = slot_in_par(sorted_regions);
+    let (mut regions, column_allocations) = slot_in(sorted_regions);
     // Un-sort the regions so they match the original indexing.
     regions.sort_unstable_by_key(|(_, region)| region.region_index().0);
     let regions = regions.into_par_iter().map(|(start, _)| start).collect();
