@@ -381,42 +381,94 @@ fn slot_in(
 //     (regions, final_allocations)
 // }
 
+// fn slot_in_par(
+//     region_shapes: Vec<RegionShape>,
+// ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
+//     let timer = Instant::now();
+    
+//     // Pre-allocate and sort columns for all regions
+//     let prepared_regions: Vec<_> = region_shapes
+//         .into_par_iter()
+//         .map(|region| {
+//             let mut cols: Vec<_> = region.columns().into_par_iter().cloned().collect();
+//             cols.sort_unstable();
+//             (cols, region.row_count(), region)
+//         })
+//         .collect();
+
+//     // Process in chunks to reduce lock contention
+//     let chunk_size = (prepared_regions.len() / current_num_threads()).max(1);
+//     let mut column_allocations = CircuitAllocations::default();
+//     let regions = prepared_regions
+//     .chunks(chunk_size)
+//     .flat_map(|chunk| {
+//         chunk.iter().map(|(cols, row_count, region)| {
+//             let region_start = first_fit_region_par(
+//                 &mut column_allocations,
+//                 cols,
+//                 *row_count,
+//                 0,
+//                 None,
+//             )
+//             .expect("We can always fit a region somewhere");
+//             (region_start.into(), region.clone())
+//         }).collect::<Vec<_>>()
+//     })
+//     .collect();
+
+//     println!("collect done: {:?}", timer.elapsed());
+//     (regions, column_allocations)
+// }
+
 fn slot_in_par(
     region_shapes: Vec<RegionShape>,
 ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
-    let timer = Instant::now();
+    let num_threads = current_num_threads();
+    let mut partitions = vec![Vec::new(); num_threads];
     
-    // Pre-allocate and sort columns for all regions
-    let prepared_regions: Vec<_> = region_shapes
+    // Distribute regions among partitions
+    for (i, region) in region_shapes.into_iter().enumerate() {
+        partitions[i % num_threads].push(region);
+    }
+
+    // Process each partition in parallel
+    let results: Vec<_> = partitions
         .into_par_iter()
-        .map(|region| {
-            let mut cols: Vec<_> = region.columns().into_par_iter().cloned().collect();
-            cols.sort_unstable();
-            (cols, region.row_count(), region)
+        .map(|partition| {
+            let mut column_allocations = CircuitAllocations::default();
+            let regions: Vec<_> = partition
+                .into_iter()
+                .map(|region| {
+                    let mut region_columns: Vec<_> = region.columns().into_par_iter().cloned().collect();
+                    region_columns.sort_unstable();
+
+                    let region_start = first_fit_region(
+                        &mut column_allocations,
+                        &region_columns,
+                        region.row_count(),
+                        0,
+                        None,
+                    )
+                    .expect("We can always fit a region somewhere");
+                    (RegionStart(region_start), region)
+                })
+                .collect();
+            (regions, column_allocations)
         })
         .collect();
 
-    // Process in chunks to reduce lock contention
-    let chunk_size = (prepared_regions.len() / current_num_threads()).max(1);
-    let mut column_allocations = CircuitAllocations::default();
-    let regions = prepared_regions
-    .chunks(chunk_size)
-    .flat_map(|chunk| {
-        chunk.iter().map(|(cols, row_count, region)| {
-            let region_start = first_fit_region_par(
-                &mut column_allocations,
-                cols,
-                *row_count,
-                0,
-                None,
-            )
-            .expect("We can always fit a region somewhere");
-            (region_start.into(), region.clone())
-        }).collect::<Vec<_>>()
-    })
-    .collect();
+    // Combine results
+    let regions = results.clone().into_iter().flat_map(|(r, _)| r).collect();
+    let column_allocations = results
+        .into_iter()
+        .map(|(_, a)| a)
+        .fold(CircuitAllocations::default(), |mut acc, allocs| {
+            for (k, v) in allocs {
+                acc.entry(k).or_default().0.extend(v.0);
+            }
+            acc
+        });
 
-    println!("collect done: {:?}", timer.elapsed());
     (regions, column_allocations)
 }
 
