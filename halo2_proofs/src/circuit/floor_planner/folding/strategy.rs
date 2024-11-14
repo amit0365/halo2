@@ -276,7 +276,7 @@ fn first_fit_region_par(
 //     })
 // }
 
-use maybe_rayon::prelude::*;
+use maybe_rayon::{current_num_threads, prelude::*};
 /// Positions the regions starting at the earliest row for which none of the columns are
 /// in use, taking into account gaps between earlier regions.
 // fn slot_in(
@@ -349,36 +349,75 @@ fn slot_in(
     (regions, column_allocations)
 }
 
+// fn slot_in_par(
+//     region_shapes: Vec<RegionShape>,
+// ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
+//     let timer = Instant::now();
+//     let column_allocations = Arc::new(Mutex::new(CircuitAllocations::default()));
+//     let regions = region_shapes
+//         .into_par_iter()
+//         .map(|region| {
+//             let mut region_columns: Vec<_> = region.columns().into_par_iter().cloned().collect();
+//             region_columns.sort_unstable();
+
+//             let region_start = first_fit_region_par(
+//                 &mut column_allocations.lock().unwrap(),
+//                 &region_columns,
+//                 region.row_count(),
+//                 0,
+//                 None,
+//             )
+//             .expect("We can always fit a region somewhere");
+//             (region_start.into(), region)
+//         })
+//         .collect();
+//     println!("collect done: {:?}", timer.elapsed());
+//     // Extract final allocations
+//     let final_allocations = Arc::try_unwrap(column_allocations)
+//         .expect("Arc should have no other references at this point")
+//         .into_inner()
+//         .expect("Mutex should not be poisoned");
+
+//     (regions, final_allocations)
+// }
+
 fn slot_in_par(
     region_shapes: Vec<RegionShape>,
 ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
     let timer = Instant::now();
-    let column_allocations = Arc::new(Mutex::new(CircuitAllocations::default()));
-    let regions = region_shapes
+    
+    // Pre-allocate and sort columns for all regions
+    let prepared_regions: Vec<_> = region_shapes
         .into_par_iter()
         .map(|region| {
-            let mut region_columns: Vec<_> = region.columns().into_par_iter().cloned().collect();
-            region_columns.sort_unstable();
+            let mut cols: Vec<_> = region.columns().into_par_iter().cloned().collect();
+            cols.sort_unstable();
+            (cols, region.row_count(), region)
+        })
+        .collect();
 
+    // Process in chunks to reduce lock contention
+    let chunk_size = (prepared_regions.len() / current_num_threads()).max(1);
+    let mut column_allocations = CircuitAllocations::default();
+    let regions = prepared_regions
+    .chunks(chunk_size)
+    .flat_map(|chunk| {
+        chunk.iter().map(|(cols, row_count, region)| {
             let region_start = first_fit_region_par(
-                &mut column_allocations.lock().unwrap(),
-                &region_columns,
-                region.row_count(),
+                &mut column_allocations,
+                cols,
+                *row_count,
                 0,
                 None,
             )
             .expect("We can always fit a region somewhere");
-            (region_start.into(), region)
-        })
-        .collect();
-    println!("collect done: {:?}", timer.elapsed());
-    // Extract final allocations
-    let final_allocations = Arc::try_unwrap(column_allocations)
-        .expect("Arc should have no other references at this point")
-        .into_inner()
-        .expect("Mutex should not be poisoned");
+            (region_start.into(), region.clone())
+        }).collect::<Vec<_>>()
+    })
+    .collect();
 
-    (regions, final_allocations)
+    println!("collect done: {:?}", timer.elapsed());
+    (regions, column_allocations)
 }
 
 /// Sorts the regions by advice area and then lays them out with the [`slot_in`] strategy.
