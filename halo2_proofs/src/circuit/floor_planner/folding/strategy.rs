@@ -104,8 +104,64 @@ pub type CircuitAllocations = HashMap<RegionColumn, Allocations>;
 /// - `start` is the current start row of the region (not of this column).
 /// - `slack` is the maximum number of rows the start could be moved down, taking into
 ///   account prior columns.
+// fn first_fit_region(
+//     column_allocations: &mut CircuitAllocations,
+//     region_columns: &[RegionColumn],
+//     region_length: usize,
+//     start: usize,
+//     slack: Option<usize>,
+// ) -> Option<usize> {
+//     let (c, remaining_columns) = match region_columns.split_first() {
+//         Some(cols) => cols,
+//         None => return Some(start),
+//     };
+//     let end = slack.map(|slack| start + region_length + slack);
+
+//     // Iterate over the unallocated non-empty intervals in c that intersect [start, end).
+//     for space in column_allocations
+//         .entry(*c)
+//         .or_default()
+//         .clone()
+//         .free_intervals(start, end)
+//     {
+//         // Do we have enough room for this column of the region in this interval?
+//         let s_slack = space
+//             .end
+//             .map(|end| (end as isize - space.start as isize) - region_length as isize);
+//         if let Some((slack, s_slack)) = slack.zip(s_slack) {
+//             assert!(s_slack <= slack as isize);
+//         }
+//         if s_slack.unwrap_or(0) >= 0 {
+//             let row = first_fit_region(
+//                 column_allocations,
+//                 remaining_columns,
+//                 region_length,
+//                 space.start,
+//                 s_slack.map(|s| s as usize),
+//             );
+//             if let Some(row) = row {
+//                 if let Some(end) = end {
+//                     assert!(row + region_length <= end);
+//                 }
+//                 column_allocations
+//                     .get_mut(c)
+//                     .unwrap()
+//                     .0
+//                     .insert(AllocatedRegion {
+//                         start: row,
+//                         length: region_length,
+//                     });
+//                 return Some(row);
+//             }
+//         }
+//     }
+
+//     // No placement worked; the caller will need to try other possibilities.
+//     None
+// }
+
 fn first_fit_region(
-    column_allocations: &mut CircuitAllocations,
+    column_allocations: &Arc<Mutex<CircuitAllocations>>,
     region_columns: &[RegionColumn],
     region_length: usize,
     start: usize,
@@ -117,20 +173,26 @@ fn first_fit_region(
     };
     let end = slack.map(|slack| start + region_length + slack);
 
-    // Iterate over the unallocated non-empty intervals in c that intersect [start, end).
-    for space in column_allocations
-        .entry(*c)
-        .or_default()
-        .clone()
-        .free_intervals(start, end)
-    {
-        // Do we have enough room for this column of the region in this interval?
+    // Lock once to get the free intervals
+    let free_intervals: Vec<_> = {
+        let allocs = column_allocations.lock().unwrap();
+        allocs.get(c)
+            .cloned()
+            .unwrap_or_default()
+            .free_intervals(start, end)
+            .collect()
+    };
+
+    // Process intervals in parallel
+    free_intervals.into_par_iter().find_map_first(|space| {
         let s_slack = space
             .end
             .map(|end| (end as isize - space.start as isize) - region_length as isize);
+        
         if let Some((slack, s_slack)) = slack.zip(s_slack) {
             assert!(s_slack <= slack as isize);
         }
+        
         if s_slack.unwrap_or(0) >= 0 {
             let row = first_fit_region(
                 column_allocations,
@@ -139,13 +201,16 @@ fn first_fit_region(
                 space.start,
                 s_slack.map(|s| s as usize),
             );
+            
             if let Some(row) = row {
                 if let Some(end) = end {
                     assert!(row + region_length <= end);
                 }
-                column_allocations
-                    .get_mut(c)
-                    .unwrap()
+                // Lock again only when we need to insert
+                let mut allocs = column_allocations.lock().unwrap();
+                allocs
+                    .entry(*c)
+                    .or_default()
                     .0
                     .insert(AllocatedRegion {
                         start: row,
@@ -154,10 +219,8 @@ fn first_fit_region(
                 return Some(row);
             }
         }
-    }
-
-    // No placement worked; the caller will need to try other possibilities.
-    None
+        None
+    })
 }
 
 use maybe_rayon::prelude::*;
@@ -211,11 +274,12 @@ fn slot_in(
     let regions = region_shapes
         .into_par_iter()
         .map(|region| {
-            let mut region_columns: Vec<_> = region.columns().iter().cloned().collect();
+            let time = Instant::now();
+            let mut region_columns: Vec<_> = region.columns().into_par_iter().cloned().collect();
             region_columns.sort_unstable();
-
+            println!("sort_unstable done: {:?}", time.elapsed());
             let region_start = first_fit_region(
-                &mut column_allocations.lock().unwrap(),
+                &column_allocations,
                 &region_columns,
                 region.row_count(),
                 0,
