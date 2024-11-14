@@ -160,40 +160,77 @@ fn first_fit_region(
     None
 }
 
+use maybe_rayon::prelude::*;
 /// Positions the regions starting at the earliest row for which none of the columns are
 /// in use, taking into account gaps between earlier regions.
+// fn slot_in(
+//     region_shapes: Vec<RegionShape>,
+// ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
+//     // Tracks the empty regions for each column.
+//     let mut column_allocations: CircuitAllocations = Default::default();
+//     println!("column_allocations done");
+//     let regions = region_shapes
+//         .into_par_iter()
+//         .map(|region| {
+//             // Sort the region's columns to ensure determinism.
+//             // - An unstable sort is fine, because region.columns() returns a set.
+//             // - The sort order relies on Column's Ord implementation!
+//             let mut region_columns: Vec<_> = region.columns().iter().cloned().collect();
+//             println!("region_columns done");
+//             region_columns.sort_unstable();
+//             println!("sort_unstable done");
+
+//             let region_start = first_fit_region(
+//                 &mut column_allocations,
+//                 &region_columns,
+//                 region.row_count(),
+//                 0,
+//                 None,
+//             )
+//             .expect("We can always fit a region somewhere");
+//             println!("first_fit_region done");
+//             (region_start.into(), region)
+//         })
+//         .collect();
+//     println!("collect done");
+//     // Return the column allocations for potential further processing.
+//     (regions, column_allocations)
+// }
+
+use std::sync::Mutex;
+use std::sync::Arc;
+
 fn slot_in(
     region_shapes: Vec<RegionShape>,
 ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
-    // Tracks the empty regions for each column.
-    let mut column_allocations: CircuitAllocations = Default::default();
-    println!("column_allocations done");
+    let column_allocations = Arc::new(Mutex::new(CircuitAllocations::default()));
+    
     let regions = region_shapes
-        .into_iter()
+        .into_par_iter()
         .map(|region| {
-            // Sort the region's columns to ensure determinism.
-            // - An unstable sort is fine, because region.columns() returns a set.
-            // - The sort order relies on Column's Ord implementation!
             let mut region_columns: Vec<_> = region.columns().iter().cloned().collect();
-            println!("region_columns done");
             region_columns.sort_unstable();
-            println!("sort_unstable done");
 
             let region_start = first_fit_region(
-                &mut column_allocations,
+                &mut column_allocations.lock().unwrap(),
                 &region_columns,
                 region.row_count(),
                 0,
                 None,
             )
             .expect("We can always fit a region somewhere");
-            println!("first_fit_region done");
+            
             (region_start.into(), region)
         })
         .collect();
-    println!("collect done");
-    // Return the column allocations for potential further processing.
-    (regions, column_allocations)
+
+    // Extract final allocations
+    let final_allocations = Arc::try_unwrap(column_allocations)
+        .unwrap()
+        .into_inner()
+        .unwrap();
+
+    (regions, final_allocations)
 }
 
 /// Sorts the regions by advice area and then lays them out with the [`slot_in`] strategy.
