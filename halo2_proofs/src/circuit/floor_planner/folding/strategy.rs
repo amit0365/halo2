@@ -160,6 +160,58 @@ fn first_fit_region(
     None
 }
 
+fn first_fit_region_par(
+    column_allocations: &mut CircuitAllocations,
+    region_columns: &[RegionColumn],
+    region_length: usize,
+    start: usize,
+    slack: Option<usize>,
+) -> Option<usize> {
+    let (c, remaining_columns) = match region_columns.split_first() {
+        Some(cols) => cols,
+        None => return Some(start),
+    };
+    let end = slack.map(|slack| start + region_length + slack);
+
+    // Get the allocations for this column
+    let allocs = column_allocations.entry(*c).or_default();
+    
+    // Find first suitable space
+    allocs.clone().free_intervals(start, end)
+        .find_map(|space| {
+            let s_slack = space
+                .end
+                .map(|end| (end as isize - space.start as isize) - region_length as isize);
+            
+            if let Some((slack, s_slack)) = slack.zip(s_slack) {
+                assert!(s_slack <= slack as isize);
+            }
+            
+            if s_slack.unwrap_or(0) >= 0 {
+                let row = first_fit_region_par(
+                    column_allocations,
+                    remaining_columns,
+                    region_length,
+                    space.start,
+                    s_slack.map(|s| s as usize),
+                )?;
+                
+                if let Some(end) = end {
+                    assert!(row + region_length <= end);
+                }
+                
+                // Insert allocation
+                column_allocations.get_mut(c).unwrap().0.insert(AllocatedRegion {
+                    start: row,
+                    length: region_length,
+                });
+                
+                Some(row)
+            } else {
+                None
+            }
+        })
+}
 
 // fn first_fit_region(
 //     column_allocations: &Arc<Mutex<CircuitAllocations>>,
@@ -267,15 +319,15 @@ use std::sync::Arc;
 fn slot_in(
     region_shapes: Vec<RegionShape>,
 ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
+    //let column_allocations = Arc::new(Mutex::new(CircuitAllocations::default()));
     let mut column_allocations = CircuitAllocations::default();
-
     let regions = region_shapes
         .into_iter()
         .map(|region| {
             let mut region_columns: Vec<_> = region.columns().into_par_iter().cloned().collect();
             region_columns.sort_unstable();
 
-            let region_start = first_fit_region(
+            let region_start = first_fit_region_par(
                 &mut column_allocations,
                 &region_columns,
                 region.row_count(),
