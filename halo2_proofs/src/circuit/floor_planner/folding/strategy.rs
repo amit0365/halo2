@@ -1,7 +1,7 @@
 use std::{
     cmp,
     collections::{BTreeSet, HashMap},
-    ops::Range,
+    ops::Range, time::Instant,
 };
 
 use super::{RegionColumn, RegionShape};
@@ -203,8 +203,11 @@ use std::sync::Arc;
 fn slot_in(
     region_shapes: Vec<RegionShape>,
 ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
+    let time = Instant::now();
     let column_allocations = Arc::new(Mutex::new(CircuitAllocations::default()));
-    
+    println!("Arc::new done: {:?}", time.elapsed());
+
+    let time = Instant::now();
     let regions = region_shapes
         .into_par_iter()
         .map(|region| {
@@ -223,12 +226,15 @@ fn slot_in(
             (region_start.into(), region)
         })
         .collect();
+    println!("collect done: {:?}", time.elapsed());
 
+    let time = Instant::now();
     // Extract final allocations
     let final_allocations = Arc::try_unwrap(column_allocations)
         .unwrap()
         .into_inner()
         .unwrap();
+    println!("into_inner done: {:?}", time.elapsed());
 
     (regions, final_allocations)
 }
