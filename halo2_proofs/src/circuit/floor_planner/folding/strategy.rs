@@ -167,7 +167,7 @@ fn slot_in(
 ) -> (Vec<(RegionStart, RegionShape)>, CircuitAllocations) {
     // Tracks the empty regions for each column.
     let mut column_allocations: CircuitAllocations = Default::default();
-
+    println!("column_allocations done");
     let regions = region_shapes
         .into_iter()
         .map(|region| {
@@ -175,7 +175,9 @@ fn slot_in(
             // - An unstable sort is fine, because region.columns() returns a set.
             // - The sort order relies on Column's Ord implementation!
             let mut region_columns: Vec<_> = region.columns().iter().cloned().collect();
+            println!("region_columns done");
             region_columns.sort_unstable();
+            println!("sort_unstable done");
 
             let region_start = first_fit_region(
                 &mut column_allocations,
@@ -185,11 +187,11 @@ fn slot_in(
                 None,
             )
             .expect("We can always fit a region somewhere");
-
+            println!("first_fit_region done");
             (region_start.into(), region)
         })
         .collect();
-
+    println!("collect done");
     // Return the column allocations for potential further processing.
     (regions, column_allocations)
 }
