@@ -199,6 +199,7 @@ pub fn slot_in_biggest_advice_first(
     region_shapes: Vec<RegionShape>,
 ) -> (Vec<RegionStart>, CircuitAllocations) {
     let mut sorted_regions: Vec<_> = region_shapes.into_iter().collect();
+    println!("sorted_regions done");
     let sort_key = |shape: &RegionShape| {
         // Count the number of advice columns
         let advice_cols = shape
@@ -212,7 +213,7 @@ pub fn slot_in_biggest_advice_first(
         // Sort by advice area (since this has the most contention).
         advice_cols * shape.row_count()
     };
-
+    println!("sort_key done");
     // This used to incorrectly use `sort_unstable_by_key` with non-unique keys, which gave
     // output that differed between 32-bit and 64-bit platforms, and potentially between Rust
     // versions.
@@ -221,7 +222,7 @@ pub fn slot_in_biggest_advice_first(
     // in the correct order).
     #[cfg(not(feature = "floor-planner-v1-legacy-pdqsort"))]
     sorted_regions.sort_by_cached_key(sort_key);
-
+    println!("sort_by_cached_key done");
     // To preserve compatibility, when the "floor-planner-v1-legacy-pdqsort" feature is enabled,
     // we use a copy of the pdqsort implementation from the Rust 1.56.1 standard library, fixed
     // to its behaviour on 64-bit platforms.
@@ -230,13 +231,15 @@ pub fn slot_in_biggest_advice_first(
     halo2_legacy_pdqsort::sort::quicksort(&mut sorted_regions, |a, b| sort_key(a).lt(&sort_key(b)));
 
     sorted_regions.reverse();
-
+    println!("reverse done");
     // Lay out the sorted regions.
     let (mut regions, column_allocations) = slot_in(sorted_regions);
-
+    println!("slot_in done");
     // Un-sort the regions so they match the original indexing.
     regions.sort_unstable_by_key(|(_, region)| region.region_index().0);
+    println!("sort_unstable_by_key done");
     let regions = regions.into_iter().map(|(start, _)| start).collect();
+    println!("into_iter done");
 
     (regions, column_allocations)
 }
