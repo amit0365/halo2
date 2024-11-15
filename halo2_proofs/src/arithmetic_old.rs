@@ -1,14 +1,15 @@
+//! This module provides common utilities, traits and structures for group,
+//! field and polynomial arithmetic.
+
 use std::ops::Neg;
+
 use super::multicore;
 pub use ff::Field;
-use maybe_rayon::iter::{
-    IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
-};
-
 use group::{
     ff::{BatchInvert, PrimeField},
     Curve, Group, GroupOpsOwned, ScalarMulOwned,
 };
+
 pub use halo2curves::{CurveAffine, CurveExt};
 
 /// This represents an element of a group with basic operations that can be
@@ -25,8 +26,6 @@ where
     T: Copy + Send + Sync + 'static + GroupOpsOwned + ScalarMulOwned<Scalar>,
 {
 }
-
-const BATCH_SIZE: usize = 64;
 
 fn get_booth_index(window_index: usize, window_size: usize, el: &[u8]) -> i32 {
     // Booth encoding:
@@ -72,327 +71,118 @@ fn get_booth_index(window_index: usize, window_size: usize, el: &[u8]) -> i32 {
     }
 }
 
-fn batch_add<C: CurveAffine>(
-    size: usize,
-    buckets: &mut [BucketAffine<C>],
-    points: &[SchedulePoint],
-    bases: &[Affine<C>],
-) {
-    let mut t = vec![C::Base::ZERO; size];
-    let mut z = vec![C::Base::ZERO; size];
-    let mut acc = C::Base::ONE;
+// fn multiexp_serial<C: CurveAffine>(coeffs: &[C::Scalar], bases: &[C], acc: &mut C::Curve) {
+//     let coeffs: Vec<_> = coeffs.iter().map(|a| a.to_repr()).collect();
 
-    for (
-        (
-            SchedulePoint {
-                base_idx,
-                buck_idx,
-                sign,
-            },
-            t,
-        ),
-        z,
-    ) in points.iter().zip(t.iter_mut()).zip(z.iter_mut())
-    {
-        *z = buckets[*buck_idx].x() - bases[*base_idx].x;
-        if *sign {
-            *t = acc * (buckets[*buck_idx].y() - bases[*base_idx].y);
-        } else {
-            *t = acc * (buckets[*buck_idx].y() + bases[*base_idx].y);
-        }
-        acc *= *z;
-    }
+//     let c = if bases.len() < 4 {
+//         1
+//     } else if bases.len() < 32 {
+//         3
+//     } else {
+//         (f64::from(bases.len() as u32)).ln().ceil() as usize
+//     };
 
-    acc = acc.invert().unwrap();
+//     fn get_at<F: PrimeField>(segment: usize, c: usize, bytes: &F::Repr) -> usize {
+//         let skip_bits = segment * c;
+//         let skip_bytes = skip_bits / 8;
 
-    for (
-        (
-            SchedulePoint {
-                base_idx,
-                buck_idx,
-                sign,
-            },
-            t,
-        ),
-        z,
-    ) in points.iter().zip(t.iter()).zip(z.iter()).rev()
-    {
-        let lambda = acc * t;
-        acc *= z;
+//         if skip_bytes >= 32 {
+//             return 0;
+//         }
 
-        let x = lambda.square() - (buckets[*buck_idx].x() + bases[*base_idx].x);
-        if *sign {
-            buckets[*buck_idx].set_y(&((lambda * (bases[*base_idx].x - x)) - bases[*base_idx].y));
-        } else {
-            buckets[*buck_idx].set_y(&((lambda * (bases[*base_idx].x - x)) + bases[*base_idx].y));
-        }
-        buckets[*buck_idx].set_x(&x);
-    }
-}
+//         let mut v = [0; 8];
+//         for (v, o) in v.iter_mut().zip(bytes.as_ref()[skip_bytes..].iter()) {
+//             *v = *o;
+//         }
 
-#[derive(Debug, Clone, Copy)]
-struct Affine<C: CurveAffine> {
-    x: C::Base,
-    y: C::Base,
-}
+//         let mut tmp = u64::from_le_bytes(v);
+//         tmp >>= skip_bits - (skip_bytes * 8);
+//         tmp %= 1 << c;
 
-impl<C: CurveAffine> Affine<C> {
-    fn from(point: &C) -> Self {
-        let coords = point.coordinates().unwrap();
+//         tmp as usize
+//     }
 
-        Self {
-            x: *coords.x(),
-            y: *coords.y(),
-        }
-    }
+//     let segments = (256 / c) + 1;
 
-    fn neg(&self) -> Self {
-        Self {
-            x: self.x,
-            y: -self.y,
-        }
-    }
+//     for current_segment in (0..segments).rev() {
+//         for _ in 0..c {
+//             *acc = acc.double();
+//         }
 
-    fn eval(&self) -> C {
-        C::from_xy(self.x, self.y).unwrap()
-    }
-}
+//         #[derive(Clone, Copy)]
+//         enum Bucket<C: CurveAffine> {
+//             None,
+//             Affine(C),
+//             Projective(C::Curve),
+//         }
 
-#[derive(Debug, Clone)]
-enum BucketAffine<C: CurveAffine> {
-    None,
-    Point(Affine<C>),
-}
+//         impl<C: CurveAffine> Bucket<C> {
+//             fn add_assign(&mut self, other: &C) {
+//                 *self = match *self {
+//                     Bucket::None => Bucket::Affine(*other),
+//                     Bucket::Affine(a) => Bucket::Projective(a + *other),
+//                     Bucket::Projective(mut a) => {
+//                         a += *other;
+//                         Bucket::Projective(a)
+//                     }
+//                 }
+//             }
 
-#[derive(Debug, Clone)]
-enum Bucket<C: CurveAffine> {
-    None,
-    Point(C::Curve),
-}
+//             fn add(self, mut other: C::Curve) -> C::Curve {
+//                 match self {
+//                     Bucket::None => other,
+//                     Bucket::Affine(a) => {
+//                         other += a;
+//                         other
+//                     }
+//                     Bucket::Projective(a) => other + &a,
+//                 }
+//             }
+//         }
 
-impl<C: CurveAffine> Bucket<C> {
-    fn add_assign(&mut self, point: &C, sign: bool) {
-        *self = match *self {
-            Bucket::None => Bucket::Point({
-                if sign {
-                    point.to_curve()
-                } else {
-                    point.to_curve().neg()
-                }
-            }),
-            Bucket::Point(a) => {
-                if sign {
-                    Self::Point(a + point)
-                } else {
-                    Self::Point(a - point)
-                }
-            }
-        }
-    }
+//         let mut buckets: Vec<Bucket<C>> = vec![Bucket::None; (1 << c) - 1];
 
-    fn add(&self, other: &BucketAffine<C>) -> C::Curve {
-        match (self, other) {
-            (Self::Point(this), BucketAffine::Point(other)) => *this + other.eval(),
-            (Self::Point(this), BucketAffine::None) => *this,
-            (Self::None, BucketAffine::Point(other)) => other.eval().to_curve(),
-            (Self::None, BucketAffine::None) => C::Curve::identity(),
-        }
-    }
-}
+//         for (coeff, base) in coeffs.iter().zip(bases.iter()) {
+//             let coeff = get_at::<C::Scalar>(current_segment, c, coeff);
+//             if coeff != 0 {
+//                 buckets[coeff - 1].add_assign(base);
+//             }
+//         }
 
-impl<C: CurveAffine> BucketAffine<C> {
-    fn assign(&mut self, point: &Affine<C>, sign: bool) -> bool {
-        match *self {
-            Self::None => {
-                *self = Self::Point(if sign { *point } else { point.neg() });
-                true
-            }
-            Self::Point(_) => false,
-        }
-    }
+//         // Summation by parts
+//         // e.g. 3a + 2b + 1c = a +
+//         //                    (a) + b +
+//         //                    ((a) + b) + c
+//         let mut running_sum = C::Curve::identity();
+//         for exp in buckets.into_iter().rev() {
+//             running_sum = exp.add(running_sum);
+//             *acc += &running_sum;
+//         }
+//     }
+// }
 
-    fn x(&self) -> C::Base {
-        match self {
-            Self::None => panic!("::x None"),
-            Self::Point(a) => a.x,
-        }
-    }
-
-    fn y(&self) -> C::Base {
-        match self {
-            Self::None => panic!("::y None"),
-            Self::Point(a) => a.y,
-        }
-    }
-
-    fn set_x(&mut self, x: &C::Base) {
-        match self {
-            Self::None => panic!("::set_x None"),
-            Self::Point(ref mut a) => a.x = *x,
-        }
-    }
-
-    fn set_y(&mut self, y: &C::Base) {
-        match self {
-            Self::None => panic!("::set_y None"),
-            Self::Point(ref mut a) => a.y = *y,
-        }
-    }
-}
-
-struct Schedule<C: CurveAffine> {
-    buckets: Vec<BucketAffine<C>>,
-    set: [SchedulePoint; BATCH_SIZE],
-    ptr: usize,
-}
-
-#[derive(Debug, Clone, Default)]
-struct SchedulePoint {
-    base_idx: usize,
-    buck_idx: usize,
-    sign: bool,
-}
-
-impl SchedulePoint {
-    fn new(base_idx: usize, buck_idx: usize, sign: bool) -> Self {
-        Self {
-            base_idx,
-            buck_idx,
-            sign,
-        }
-    }
-}
-
-impl<C: CurveAffine> Schedule<C> {
-    fn new(c: usize) -> Self {
-        let set = (0..BATCH_SIZE)
-            .map(|_| SchedulePoint::default())
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        Self {
-            buckets: vec![BucketAffine::None; 1 << (c - 1)],
-            set,
-            ptr: 0,
-        }
-    }
-
-    fn contains(&self, buck_idx: usize) -> bool {
-        self.set.iter().any(|sch| sch.buck_idx == buck_idx)
-    }
-
-    fn execute(&mut self, bases: &[Affine<C>]) {
-        if self.ptr != 0 {
-            batch_add(self.ptr, &mut self.buckets, &self.set, bases);
-            self.ptr = 0;
-            self.set
-                .iter_mut()
-                .for_each(|sch| *sch = SchedulePoint::default());
-        }
-    }
-
-    fn add(&mut self, bases: &[Affine<C>], base_idx: usize, buck_idx: usize, sign: bool) {
-        if !self.buckets[buck_idx].assign(&bases[base_idx], sign) {
-            self.set[self.ptr] = SchedulePoint::new(base_idx, buck_idx, sign);
-            self.ptr += 1;
-        }
-
-        if self.ptr == self.set.len() {
-            self.execute(bases);
-        }
-    }
-}
-
-pub fn multiexp_serial<C: CurveAffine>(coeffs: &[C::Scalar], bases: &[C], acc: &mut C::Curve) {
+/// Performs a small multi-exponentiation operation.
+/// Uses the double-and-add algorithm with doublings shared across points.
+pub fn small_multiexp<C: CurveAffine>(coeffs: &[C::Scalar], bases: &[C]) -> C::Curve {
     let coeffs: Vec<_> = coeffs.iter().map(|a| a.to_repr()).collect();
+    let mut acc = C::Curve::identity();
 
-    let c = if bases.len() < 4 {
-        1
-    } else if bases.len() < 32 {
-        3
-    } else {
-        (f64::from(bases.len() as u32)).ln().ceil() as usize
-    };
-
-    let field_byte_size = coeffs[0].as_ref().len();
-    // OR all coefficients in order to make a mask to figure out the maximum number of bytes used
-    // among all coefficients.
-    let mut acc_or = vec![0; field_byte_size];
-    for coeff in &coeffs {
-        for (acc_limb, limb) in acc_or.iter_mut().zip(coeff.as_ref().iter()) {
-            *acc_limb = *acc_limb | *limb;
-        }
-    }
-    let max_byte_size = field_byte_size
-        - acc_or
-            .iter()
-            .rev()
-            .position(|v| *v != 0)
-            .unwrap_or(field_byte_size);
-    if max_byte_size == 0 {
-        return;
-    }
-    let number_of_windows = max_byte_size * 8 as usize / c + 1;
-
-    for current_window in (0..number_of_windows).rev() {
-        for _ in 0..c {
-            *acc = acc.double();
-        }
-
-        #[derive(Clone, Copy)]
-        enum Bucket<C: CurveAffine> {
-            None,
-            Affine(C),
-            Projective(C::Curve),
-        }
-
-        impl<C: CurveAffine> Bucket<C> {
-            fn add_assign(&mut self, other: &C) {
-                *self = match *self {
-                    Bucket::None => Bucket::Affine(*other),
-                    Bucket::Affine(a) => Bucket::Projective(a + *other),
-                    Bucket::Projective(mut a) => {
-                        a += *other;
-                        Bucket::Projective(a)
-                    }
-                }
-            }
-
-            fn add(self, mut other: C::Curve) -> C::Curve {
-                match self {
-                    Bucket::None => other,
-                    Bucket::Affine(a) => {
-                        other += a;
-                        other
-                    }
-                    Bucket::Projective(a) => other + a,
+    // for byte idx
+    for byte_idx in (0..32).rev() {
+        // for bit idx
+        for bit_idx in (0..8).rev() {
+            acc = acc.double();
+            // for each coeff
+            for coeff_idx in 0..coeffs.len() {
+                let byte = coeffs[coeff_idx].as_ref()[byte_idx];
+                if ((byte >> bit_idx) & 1) != 0 {
+                    acc += bases[coeff_idx];
                 }
             }
         }
-
-        let mut buckets: Vec<Bucket<C>> = vec![Bucket::None; 1 << (c - 1)];
-
-        for (coeff, base) in coeffs.iter().zip(bases.iter()) {
-            let coeff = get_booth_index(current_window, c, coeff.as_ref());
-            if coeff.is_positive() {
-                buckets[coeff as usize - 1].add_assign(base);
-            }
-            if coeff.is_negative() {
-                buckets[coeff.unsigned_abs() as usize - 1].add_assign(&base.neg());
-            }
-        }
-
-        // Summation by parts
-        // e.g. 3a + 2b + 1c = a +
-        //                    (a) + b +
-        //                    ((a) + b) + c
-        let mut running_sum = C::Curve::identity();
-        for exp in buckets.into_iter().rev() {
-            running_sum = exp.add(running_sum);
-            *acc += &running_sum;
-        }
     }
+
+    acc
 }
 
 /// Performs a multi-exponentiation operation.
@@ -403,12 +193,12 @@ pub fn multiexp_serial<C: CurveAffine>(coeffs: &[C::Scalar], bases: &[C], acc: &
 pub fn best_multiexp<C: CurveAffine>(coeffs: &[C::Scalar], bases: &[C]) -> C::Curve {
     assert_eq!(coeffs.len(), bases.len());
 
-    let num_threads = maybe_rayon::current_num_threads();
+    let num_threads = multicore::current_num_threads();
     if coeffs.len() > num_threads {
         let chunk = coeffs.len() / num_threads;
         let num_chunks = coeffs.chunks(chunk).len();
         let mut results = vec![C::Curve::identity(); num_chunks];
-        maybe_rayon::scope(|scope| {
+        multicore::scope(|scope| {
             let chunk = coeffs.len() / num_threads;
 
             for ((coeffs, bases), acc) in coeffs
@@ -427,84 +217,6 @@ pub fn best_multiexp<C: CurveAffine>(coeffs: &[C::Scalar], bases: &[C]) -> C::Cu
         multiexp_serial(coeffs, bases, &mut acc);
         acc
     }
-}
-///
-/// This function will panic if coeffs and bases have a different length.
-///
-/// This will use multithreading if beneficial.
-pub fn best_multiexp_independent_points<C: CurveAffine>(
-    coeffs: &[C::Scalar],
-    bases: &[C],
-) -> C::Curve {
-    assert_eq!(coeffs.len(), bases.len());
-
-    // TODO: consider adjusting it with emprical data?
-    let c = if bases.len() < 4 {
-        1
-    } else if bases.len() < 32 {
-        3
-    } else {
-        (f64::from(bases.len() as u32)).ln().ceil() as usize
-    };
-
-    if c < 10 {
-        return best_multiexp(coeffs, bases);
-    }
-
-    // coeffs to byte representation
-    let coeffs: Vec<_> = coeffs.par_iter().map(|a| a.to_repr()).collect();
-    // copy bases into `Affine` to skip in on curve check for every access
-    let bases_local: Vec<_> = bases.par_iter().map(Affine::from).collect();
-
-    // number of windows
-    let number_of_windows = C::Scalar::NUM_BITS as usize / c + 1;
-    // accumumator for each window
-    let mut acc = vec![C::Curve::identity(); number_of_windows];
-    acc.par_iter_mut().enumerate().rev().for_each(|(w, acc)| {
-        // jacobian buckets for already scheduled points
-        let mut j_bucks = vec![Bucket::<C>::None; 1 << (c - 1)];
-
-        // schedular for affine addition
-        let mut sched = Schedule::new(c);
-
-        for (base_idx, coeff) in coeffs.iter().enumerate() {
-            let buck_idx = get_booth_index(w, c, coeff.as_ref());
-
-            if buck_idx != 0 {
-                // parse bucket index
-                let sign = buck_idx.is_positive();
-                let buck_idx = buck_idx.unsigned_abs() as usize - 1;
-
-                if sched.contains(buck_idx) {
-                    // greedy accumulation
-                    // we use original bases here
-                    j_bucks[buck_idx].add_assign(&bases[base_idx], sign);
-                } else {
-                    // also flushes the schedule if full
-                    sched.add(&bases_local, base_idx, buck_idx, sign);
-                }
-            }
-        }
-
-        // flush the schedule
-        sched.execute(&bases_local);
-
-        // summation by parts
-        // e.g. 3a + 2b + 1c = a +
-        //                    (a) + b +
-        //                    ((a) + b) + c
-        let mut running_sum = C::Curve::identity();
-        for (j_buck, a_buck) in j_bucks.iter().zip(sched.buckets.iter()).rev() {
-            running_sum += j_buck.add(a_buck);
-            *acc += running_sum;
-        }
-
-        // shift accumulator to the window position
-        for _ in 0..c * w {
-            *acc = acc.double();
-        }
-    });
-    acc.into_iter().sum::<_>()
 }
 
 /// Performs a radix-$2$ Fast-Fourier Transformation (FFT) on a vector of size
@@ -884,97 +596,5 @@ fn test_lagrange_interpolate() {
         for (point, eval) in points.iter().zip(evals) {
             assert_eq!(eval_polynomial(&poly, *point), *eval);
         }
-    }
-}
-
-
-#[cfg(test)]
-mod test {
-
-    use std::ops::Neg;
-
-    use halo2curves::bn256::{Fr, G1Affine, G1};
-    use ark_std::{end_timer, start_timer};
-    use ff::{Field, PrimeField};
-    use group::{Curve, Group};
-    use halo2curves::CurveAffine;
-    use rand_core::OsRng;
-
-    #[test]
-    fn test_booth_encoding() {
-        fn mul(scalar: &Fr, point: &G1Affine, window: usize) -> G1Affine {
-            let u = scalar.to_repr();
-            let n = Fr::NUM_BITS as usize / window + 1;
-
-            let table = (0..=1 << (window - 1))
-                .map(|i| point * Fr::from(i as u64))
-                .collect::<Vec<_>>();
-
-            let mut acc = G1::identity();
-            for i in (0..n).rev() {
-                for _ in 0..window {
-                    acc = acc.double();
-                }
-
-                let idx = super::get_booth_index(i, window, u.as_ref());
-
-                if idx.is_negative() {
-                    acc += table[idx.unsigned_abs() as usize].neg();
-                }
-                if idx.is_positive() {
-                    acc += table[idx.unsigned_abs() as usize];
-                }
-            }
-
-            acc.to_affine()
-        }
-
-        let (scalars, points): (Vec<_>, Vec<_>) = (0..10)
-            .map(|_| {
-                let scalar = Fr::random(OsRng);
-                let point = G1Affine::random(OsRng);
-                (scalar, point)
-            })
-            .unzip();
-
-        for window in 1..10 {
-            for (scalar, point) in scalars.iter().zip(points.iter()) {
-                let c0 = mul(scalar, point, window);
-                let c1 = point * scalar;
-                assert_eq!(c0, c1.to_affine());
-            }
-        }
-    }
-
-    fn run_msm_cross<C: CurveAffine>(min_k: usize, max_k: usize) {
-        let points = (0..1 << max_k)
-            .map(|_| C::Curve::random(OsRng))
-            .collect::<Vec<_>>();
-        let mut affine_points = vec![C::identity(); 1 << max_k];
-        C::Curve::batch_normalize(&points[..], &mut affine_points[..]);
-        let points = affine_points;
-
-        let scalars = (0..1 << max_k)
-            .map(|_| C::Scalar::random(OsRng))
-            .collect::<Vec<_>>();
-
-        for k in min_k..=max_k {
-            let points = &points[..1 << k];
-            let scalars = &scalars[..1 << k];
-
-            let t0 = start_timer!(|| format!("cyclone k={}", k));
-            let e0 = super::best_multiexp_independent_points(scalars, points);
-            end_timer!(t0);
-
-            let t1 = start_timer!(|| format!("older k={}", k));
-            let e1 = super::best_multiexp(scalars, points);
-            end_timer!(t1);
-            assert_eq!(e0, e1);
-        }
-    }
-
-    #[test]
-    fn test_msm_cross() {
-        run_msm_cross::<G1Affine>(14, 22);
     }
 }
