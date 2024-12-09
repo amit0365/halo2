@@ -119,7 +119,7 @@ impl FloorPlanner for Folding {
                     .flat_map(move |e| e.range().unwrap().map(move |i| (c, i)))
             })
         };
-        println!("first pass column allocation: {:?}", timer.elapsed());
+        //println!("first pass column allocation: {:?}", timer.elapsed());
 
         let timer = Instant::now();
         // Second pass:
@@ -129,7 +129,7 @@ impl FloorPlanner for Folding {
             let pass = &mut assign;
             circuit.synthesize(config, FoldingPass::assign(pass))?;
         }
-        println!("second pass synthesize: {:?}", timer.elapsed());
+        //println!("second pass synthesize: {:?}", timer.elapsed());
 
         let timer = Instant::now();
         // - Assign the constants.
@@ -152,7 +152,7 @@ impl FloorPlanner for Folding {
                 *plan.regions[*advice.region_index] + advice.row_offset,
             )?;
         }
-        println!("second pass assign constants: {:?}", timer.elapsed());
+        //println!("second pass assign constants: {:?}", timer.elapsed());
         Ok(())
     }
 }
