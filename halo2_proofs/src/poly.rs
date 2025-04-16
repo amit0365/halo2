@@ -51,7 +51,7 @@ pub struct Coeff;
 impl Basis for Coeff {}
 
 /// The polynomial is defined as coefficients of Lagrange basis polynomials
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct LagrangeCoeff;
 impl Basis for LagrangeCoeff {}
 
@@ -63,7 +63,7 @@ impl Basis for ExtendedLagrangeCoeff {}
 
 /// Represents a univariate polynomial defined over a field and a particular
 /// basis.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Polynomial<F, B> {
     values: Vec<F>,
     _marker: PhantomData<B>,
@@ -175,7 +175,7 @@ impl<F: SerdePrimeField, B> Polynomial<F, B> {
     }
 }
 
-pub(crate) fn batch_invert_assigned<F: Field>(
+pub fn batch_invert_assigned<F: Field>(
     assigned: Vec<Polynomial<Assigned<F>, LagrangeCoeff>>,
 ) -> Vec<Polynomial<F, LagrangeCoeff>> {
     let mut assigned_denominators: Vec<_> = assigned
@@ -202,6 +202,22 @@ pub(crate) fn batch_invert_assigned<F: Field>(
         .zip(assigned_denominators)
         .map(|(poly, inv_denoms)| poly.invert(inv_denoms.into_iter().map(|d| d.unwrap_or(F::ONE))))
         .collect()
+}
+
+pub fn empty_lagrange<F: Default + Clone>(size: usize) -> Polynomial<F, LagrangeCoeff> {
+    Polynomial {
+        values: vec![F::default(); size],
+        _marker: PhantomData,
+    }
+}
+
+pub fn empty_lagrange_assigned<F: ff::Field>(
+    size: usize,
+) -> Polynomial<Assigned<F>, LagrangeCoeff> {
+    Polynomial {
+        values: vec![F::ZERO.into(); size],
+        _marker: PhantomData,
+    }
 }
 
 impl<F: Field> Polynomial<Assigned<F>, LagrangeCoeff> {

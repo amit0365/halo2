@@ -21,11 +21,11 @@ use crate::transcript::{ChallengeScalar, EncodedChallenge, Transcript};
 use crate::SerdeFormat;
 
 mod assigned;
-mod circuit;
+pub mod circuit;
 mod error;
 mod evaluation;
 mod keygen;
-mod lookup;
+pub mod lookup;
 pub mod permutation;
 mod shuffle;
 mod vanishing;

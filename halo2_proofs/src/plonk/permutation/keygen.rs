@@ -33,7 +33,7 @@ pub struct Assembly {
 
 #[cfg(not(feature = "thread-safe-region"))]
 impl Assembly {
-    pub(crate) fn new(n: usize, p: &Argument) -> Self {
+    pub fn new(n: usize, p: &Argument) -> Self {
         // Initialize the copy vector to keep track of copy constraints in all
         // the permutation arguments.
         let mut columns = vec![];
@@ -53,7 +53,7 @@ impl Assembly {
         }
     }
 
-    pub(crate) fn copy(
+    pub fn copy(
         &mut self,
         left_column: Column<Any>,
         left_row: usize,
